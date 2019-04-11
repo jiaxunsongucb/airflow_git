@@ -277,7 +277,7 @@ def copy_to_snowflake(logger):
 
     logger.info("Creating table GsRatings and copying data...")
     cur.execute(
-        (f"CREATE OR REPLACE TABLE SCHOOLSCORES_DB.RAW_GREATSCHOOLS.GsRatings "
+        (f"CREATE OR REPLACE TABLE {DATABASE}.{SCHEMA}.GsRatings "
          "(testratingid VARCHAR(10), "
          "universalid VARCHAR(10), "
          "rating NUMBER(2), "
@@ -292,7 +292,7 @@ def copy_to_snowflake(logger):
 
     logger.info("Creating table GsCityRatings and copying data...")
     cur.execute(
-        (f"CREATE OR REPLACE TABLE SCHOOLSCORES_DB.RAW_GREATSCHOOLS.GsCityRatings "
+        (f"CREATE OR REPLACE TABLE {DATABASE}.{SCHEMA}.GsCityRatings "
          "(id VARCHAR(10), "
          "name VARCHAR(128), "
          "state VARCHAR(2), "
