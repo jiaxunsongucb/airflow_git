@@ -310,7 +310,7 @@ def copy_to_snowflake(logger):
     )
     logger.info("Creating table GsDictionary and copying data...")
     cur.execute(
-        (f"CREATE OR REPLACE TABLE {DATABASE}.{SCHEMA}..GsDictionary "
+        (f"CREATE OR REPLACE TABLE {DATABASE}.{SCHEMA}.GsDictionary "
          "(id VARCHAR(10), "
          "year NUMBER(4), "
          "description VARCHAR(1024));")
