@@ -307,8 +307,11 @@ def copy_to_snowflake(logger):
     )
 
     logger.info("Granting permission on new tables...")
-    for ROLE in ["DATAENGINEERING_ROLE", "DATASCIENCE_ROLE", "ANALYST_ROLE"]:
-        for TABLE in ["GsDirectory", "GsRatings", "GsCityRatings", "GsDictionary"]:
+    for TABLE in ["GsDirectory", "GsRatings", "GsCityRatings", "GsDictionary"]:
+        cur.execute(
+            f"GRANT OWNERSHIP ON {DATABASE}.{SCHEMA}.{TABLE} TO ETL_ROLE;"
+        )
+        for ROLE in ["DATAENGINEERING_ROLE", "DATASCIENCE_ROLE", "ANALYST_ROLE"]:
             cur.execute(
                 f"GRANT SELECT ON {DATABASE}.{SCHEMA}.{TABLE} TO {ROLE};"
             )
