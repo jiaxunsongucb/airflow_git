@@ -127,10 +127,10 @@ def create_logger(tz="UTC"):
     # get system environments
     DAG_ID = os.getenv("dag_id", "test_dag")
     TASK_ID = os.getenv("task_id", "test_task")
-    EXECUTION_DATE = f"{datetime.now():%Y-%m-%dT%H:%M:%S.%f}"
+    EXECUTION_DATETIME = f"{datetime.now():%Y-%m-%dT%H:%M:%S.%f}"
 
     # create logger
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger(f"{DAG_ID}-{TASK_ID}-{EXECUTION_DATETIME}")
     # all messages will be printed on the console and added into airflow default log files
     logger.setLevel(logging.INFO)
 
@@ -139,7 +139,7 @@ def create_logger(tz="UTC"):
     log_folder = f"{BASE_LOG_FOLDER}/{DAG_ID}/{TASK_ID}"
     if not os.path.isdir(log_folder):
         os.makedirs(log_folder)
-    log_path = f"{log_folder}/{DAG_ID}-{TASK_ID}-{EXECUTION_DATE}.log"
+    log_path = f"{log_folder}/{DAG_ID}-{TASK_ID}-{EXECUTION_DATETIME}.log"
     fh = logging.FileHandler(log_path, mode='a')
     fh.setLevel(logging.INFO)
 
@@ -240,12 +240,14 @@ def run_with_logging(tz="US/Pacific"):
             try:
                 result = func(logger)
                 logger.info("Process finished with exit code 0")
+                logger.removeHandler(logger.handlers[0])
                 return result
 
             except Exception as error:
                 logger.error(error)
                 logger.error("\n" + "".join(traceback.format_exception(*sys.exc_info())))
                 logger.error("Process finished with exit code 1")
+                logger.removeHandler(logger.handlers[0])
                 sys.exit(1)
 
         return wrapper

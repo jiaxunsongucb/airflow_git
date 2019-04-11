@@ -13,7 +13,8 @@ import time
 
 pd.set_option('display.max_rows', 100)
 pd.set_option('display.max_columns', 100)
-pd.set_option('display.width', 10)
+# pd.set_option('display.width', 5)
+
 
 @run_with_logging()
 def attachment_to_s3(logger):
@@ -32,16 +33,20 @@ def attachment_to_s3(logger):
     ----------------------
     None
     """
+    # get airflow env
+    AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
+
     # setup S3
     s3hook = connect_to_s3()
     AWS_S3_BUCKET_NAME = Variable.get("AWS_S3_NAME")
 
     # setup Snowflake
     DATABASE = "SCHOOLSCORES_DB"
-    SCHEMA = "RAW_GREATSCHOOLS"
+    SCHEMA = "RAW_GREATSCHOOLS" if AIRFLOW_ENV == "PROD" else AIRFLOW_ENV + "_" + "RAW_GREATSCHOOLS"
     con = connect_to_snowflake(database=DATABASE, schema=SCHEMA)
 
     # load tracker file (a csv file tracks the download history)
+    # create the schema and table on snowflake first!
     greatschools_tracker = pd.read_sql_query("SELECT * FROM DOWNLOAD_HISTORY", con)
     logger.info("Information in DOWNLOAD_HISTORY:")
     print(greatschools_tracker)
@@ -67,7 +72,12 @@ def attachment_to_s3(logger):
         retrieve_datetime = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         email_datetime = datetime.strptime(time.strftime("%Y-%m-%d %H:%M:%S", email.utils.parsedate(msg["Date"])),
                                            "%Y-%m-%d %H:%M:%S")
-        stage_location = f"RawData/GreatSchools/{email_datetime.strftime('%Y%m%d')}"
+
+        if AIRFLOW_ENV == "PROD":
+            stage_location = f"RawData/GreatSchools/{email_datetime.strftime('%Y%m%d')}"
+        else:
+            stage_location = f"RawData/GreatSchools/{AIRFLOW_ENV}/{email_datetime.strftime('%Y%m%d')}"
+
         email_subject = msg["Subject"]
         is_feed_update = "GreatSchools Feed Update" in email_subject
 
@@ -135,6 +145,9 @@ def staging_to_s3(logger):
     ----------------------
     None
     """
+    # get airflow env
+    AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
+
     # Initialize variables
     s3_folder = pod_xcom_pull("greatschools_ingest", "attachment_to_s3", "stage_location")
     logger.info(f"Got stage loaction: {s3_folder}")
@@ -207,14 +220,17 @@ def copy_to_snowflake(logger):
     ----------------------
     None
     """
+    # get airflow env
+    AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
+
     # Initialize variables
     s3_folder = pod_xcom_pull("greatschools_ingest", "attachment_to_s3", "stage_location")
     logger.info(f"Got stage loaction: {s3_folder}")
-    s3_subfolder = s3_folder.split("/")[-1]
+    s3_subfolder = s3_folder.replace("RawData/GreatSchools/", "")
 
     # Snowflake setup.
     DATABASE = "SCHOOLSCORES_DB"
-    SCHEMA = "RAW_GREATSCHOOLS"
+    SCHEMA = "RAW_GREATSCHOOLS" if AIRFLOW_ENV == "PROD" else AIRFLOW_ENV + "_" + "RAW_GREATSCHOOLS"
     con = connect_to_snowflake(database=DATABASE, schema=SCHEMA)
     cur = con.cursor()
 
@@ -330,5 +346,5 @@ def copy_to_snowflake(logger):
 
 if __name__ == "__main__":
     attachment_to_s3()
-    staging_to_s3()
-    copy_to_snowflake()
+    # staging_to_s3()
+    # copy_to_snowflake()
