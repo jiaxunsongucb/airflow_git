@@ -145,9 +145,6 @@ def staging_to_s3(logger):
     ----------------------
     None
     """
-    # get airflow env
-    AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
-
     # Initialize variables
     s3_folder = pod_xcom_pull("greatschools_ingest", "attachment_to_s3", "stage_location")
     logger.info(f"Got stage loaction: {s3_folder}")
@@ -334,7 +331,7 @@ def copy_to_snowflake(logger):
 
     # update DOWNLOAD_HISTORY
     logger.info("Updating DOWNLOAD_HISTORY table...")
-    max_date = datetime.strptime(s3_subfolder, "%Y%m%d").strftime("%Y-%m-%d")
+    max_date = datetime.strptime(s3_subfolder[-8:], "%Y%m%d").strftime("%Y-%m-%d")
     cur.execute(
         f"UPDATE {DATABASE}.{SCHEMA}.DOWNLOAD_HISTORY "
         "SET UPDATED = TRUE "
@@ -345,6 +342,6 @@ def copy_to_snowflake(logger):
 
 
 if __name__ == "__main__":
-    attachment_to_s3()
+    # attachment_to_s3()
     # staging_to_s3()
-    # copy_to_snowflake()
+    copy_to_snowflake()
