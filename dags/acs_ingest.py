@@ -59,10 +59,87 @@ sequence_FTP_to_S3 = SubDagOperator(dag=dag,
 
 copy_geo_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_geo_S3_to_Snowflake", code_folder=code_folder)
 copy_lookup_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_lookup_S3_to_Snowflake", code_folder=code_folder)
-copy_sequence_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_sequence_S3_to_Snowflake", code_folder=code_folder)
+
+
+def subdag_copy_sequence(parent_dag_name, child_dag_name, default_args):
+    dag_subdag = DAG(
+        dag_id=f"{parent_dag_name}.{child_dag_name}",
+        default_args=default_args
+        )
+
+    for sequence in range(1, 150):
+        RoofstockKubernetesPodOperator(
+            code_folder=code_folder,
+            script_name="acs_ingest",
+            python_callable="copy_sequence_S3_to_Snowflake",
+            task_id=f"{child_dag_name}-Seq{sequence}",
+            dag=dag_subdag,
+            wait_for_downstream=True,
+            provide_context=True,
+            env_vars={"year": year, "sequence": sequence}
+            )
+
+    return dag_subdag
+
+
+copy_sequence_S3_to_Snowflake = SubDagOperator(dag=dag,
+                                               task_id="copy_sequence_S3_to_Snowflake",
+                                               subdag=subdag_copy_sequence('acs_ingest', 'copy_sequence_S3_to_Snowflake', default_args))
 
 update_geometa = RoofstockKubernetesPodOperator(dag=dag, task_id="update_geometa", code_folder=code_folder)
-update_fact = RoofstockKubernetesPodOperator(dag=dag, task_id="update_fact", code_folder=code_folder)
+
+
+def subdag_update_fact_on_Snowflake(parent_dag_name, child_dag_name, default_args):
+    dag_subdag = DAG(
+        dag_id=f"{parent_dag_name}.{child_dag_name}",
+        default_args=default_args
+    )
+
+    variable_list_to_S3 = RoofstockKubernetesPodOperator(
+        code_folder=code_folder,
+        script_name="acs_ingest",
+        task_id="upload_variable_list_to_S3",
+        dag=dag_subdag,
+        wait_for_downstream=True,
+        provide_context=True
+    )
+
+    variable_list_to_Snowflake = RoofstockKubernetesPodOperator(
+        code_folder=code_folder,
+        script_name="acs_ingest",
+        task_id="upload_variable_list_to_Snowflake",
+        dag=dag_subdag,
+        wait_for_downstream=True,
+        provide_context=True,
+        op_kwargs={"year": year}
+    )
+
+    create_fact_table_on_Snowflake = RoofstockKubernetesPodOperator(
+        code_folder=code_folder,
+        script_name="acs_ingest",
+        task_id="create_fact_table",
+        dag=dag_subdag,
+        wait_for_downstream=True,
+        provide_context=True
+    )
+
+    variables_from_raw_tables = RoofstockKubernetesPodOperator(
+        code_folder=code_folder,
+        script_name="acs_ingest",
+        task_id="pull_variables_from_raw_tables",
+        dag=dag_subdag,
+        wait_for_downstream=True,
+        provide_context=True,
+        op_kwargs={"year": year}
+    )
+
+    variable_list_to_S3 >> variable_list_to_Snowflake >> create_fact_table_on_Snowflake >> variables_from_raw_tables
+    return dag_subdag
+
+
+update_fact = SubDagOperator(dag=dag,
+                             task_id="update_fact",
+                             subdag=subdag_update_fact_on_Snowflake('acs_ingest', 'update_fact', default_args))
 
 delete_zips = DummyOperator(
     task_id="delete_zips",
