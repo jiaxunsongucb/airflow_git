@@ -59,10 +59,10 @@ sequence_FTP_to_S3 = SubDagOperator(dag=dag,
 
 copy_geo_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_geo_S3_to_Snowflake", code_folder=code_folder)
 copy_lookup_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_lookup_S3_to_Snowflake", code_folder=code_folder)
-copy_sequence_S3_to_Snowflake = SubDagOperator(dag=dag, task_id="copy_sequence_S3_to_Snowflake", code_folder=code_folder)
+copy_sequence_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_sequence_S3_to_Snowflake", code_folder=code_folder)
 
 update_geometa = RoofstockKubernetesPodOperator(dag=dag, task_id="update_geometa", code_folder=code_folder)
-update_fact = SubDagOperator(dag=dag, task_id="update_fact", code_folder=code_folder)
+update_fact = RoofstockKubernetesPodOperator(dag=dag, task_id="update_fact", code_folder=code_folder)
 
 delete_zips = DummyOperator(
     task_id="delete_zips",
