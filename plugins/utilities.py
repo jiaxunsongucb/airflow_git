@@ -503,6 +503,8 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
 
     def __init__(self,
                  code_folder,
+                 script_name=str(),
+                 python_callable=str(),
                  image=str(),
                  namespace=str(),
                  cmds=[],
@@ -533,8 +535,10 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
                  security_context={},
                  *args,
                  **kwargs):
-        # required from user: dag, task_id, code_folder
+        # required from user: dag, task_id, code_folder, python_callable
         super(KubernetesPodOperator, self).__init__(*args, **kwargs)
+        self.script_name = script_name or self.dag_id
+        self.python_callable = python_callable or self.task_id
         self.image = image or "jiaxun/datatools:general_purpose"
         self.namespace = namespace or conf.get("kubernetes", "namespace")
         self.code_folder = code_folder
@@ -599,12 +603,12 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
         # a DNS-1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end
         # with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[
         # a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
-        return (self.dag_id + "-" + self.task_id).replace("_", "")
+        return (self.script_name + "-" + self.python_callable).replace("_", "-")
 
     @property
     def default_arguments(self):
         return [(f"cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/{self.code_folder}"
-                 f"&& python -c 'from {self.dag_id} import *; {self.task_id}()'")]
+                 f"&& python -c 'from {self.script_name} import *; {self.python_callable}()'")]
 
     @property
     def default_env_vars(self):
