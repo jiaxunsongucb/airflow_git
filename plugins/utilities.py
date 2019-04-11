@@ -521,7 +521,7 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
                  node_selectors={},
                  annotations={},
                  affinity={},
-                 xcom_push=False,
+                 do_xcom_push=False,
                  resources=None,
                  config_file=None,
                  image_pull_secrets=None,
@@ -529,6 +529,8 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
                  is_delete_operator_pod=True,
                  hostnetwork=True,
                  tolerations=[],
+                 configmaps=[],
+                 security_context={},
                  *args,
                  **kwargs):
         # required from user: dag, task_id, code_folder
@@ -544,22 +546,24 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
         self.env_vars = {**env_vars, **self.default_env_vars}
         self.volume_mounts = volume_mounts or self.default_volumes_and_volume_mounts[0]
         self.volumes = volumes or self.default_volumes_and_volume_mounts[1]
-        self.secrets = secrets or []
+        self.secrets = secrets
         self.in_cluster = in_cluster
         self.cluster_context = cluster_context
         self.get_logs = get_logs
         self.image_pull_policy = image_pull_policy
-        self.node_selectors = node_selectors or {}
-        self.annotations = annotations or {}
+        self.node_selectors = node_selectors
+        self.annotations = annotations
         self.affinity = affinity or self.default_affinity
-        self.xcom_push = xcom_push
+        self.do_xcom_push = do_xcom_push
         self.resources = resources or self.default_resources
         self.config_file = config_file
         self.image_pull_secrets = image_pull_secrets
         self.service_account_name = service_account_name
         self.is_delete_operator_pod = is_delete_operator_pod
         self.hostnetwork = hostnetwork
-        self.tolerations = tolerations or []
+        self.tolerations = tolerations
+        self.configmaps = configmaps
+        self.security_context = security_context
         self.executor_config = self.default_executor_config
 
     @staticmethod
