@@ -255,8 +255,8 @@ def copy_to_snowflake(logger):
          "fax VARCHAR(32), "
          "county VARCHAR(64), "
          "fipscounty VARCHAR(5), "
-         "lat NUMBER(7, 4), "
-         "lon NUMBER(7, 4), "
+         "lat NUMBER(10, 6), "
+         "lon NUMBER(10, 6), "
          "website VARCHAR(1024), "
          "subtype VARCHAR(1024), "
          "overviewurl VARCHAR(1024), "
@@ -298,8 +298,8 @@ def copy_to_snowflake(logger):
          "state VARCHAR(2), "
          "rating NUMBER(2), "
          "url VARCHAR(512), "
-         "lat NUMBER(7, 4), "
-         "lon NUMBER(7, 4), "
+         "lat NUMBER(10, 6), "
+         "lon NUMBER(10, 6), "
          "active NUMBER(1));")
     )
 
@@ -310,7 +310,7 @@ def copy_to_snowflake(logger):
     )
     logger.info("Creating table GsDictionary and copying data...")
     cur.execute(
-        (f"CREATE OR REPLACE TABLE SCHOOLSCORES_DB.RAW_GREATSCHOOLS.GsDictionary "
+        (f"CREATE OR REPLACE TABLE {DATABASE}.{SCHEMA}..GsDictionary "
          "(id VARCHAR(10), "
          "year NUMBER(4), "
          "description VARCHAR(1024));")
