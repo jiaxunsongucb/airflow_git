@@ -601,7 +601,6 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
 
     @property
     def default_name(self):
-        # TODO
         # a DNS-1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end
         # with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[
         # a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
@@ -609,7 +608,10 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
 
     @property
     def default_arguments(self):
-        print(self.python_kwargs)
+        print("Code location: /root/airflow/code/dags/code_for_kubernetes_pod_operator/{self.code_folder}")
+        print("Script name: {self.script_name}.py")
+        print("Function name: {self.python_callable}")
+        print("kwargs: {self.python_kwargs}")
         return [(f'cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/{self.code_folder} && '
                  f'python -c "from {self.script_name} import *; {self.python_callable}(**{self.python_kwargs})"')]
 
@@ -622,8 +624,7 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
 
     @property
     def default_volumes_and_volume_mounts(self):
-        # TODO namespace to env_name
-        env_name = self.namespace.split("-")[1]
+        env_name = self.namespace.replace("airflow-", "")
         airflow_code_volume, airflow_code_volume_mount = self._volume_factory("airflow-code",
                                                                               "airflow-code-claim",
                                                                               "/root/airflow/code",
