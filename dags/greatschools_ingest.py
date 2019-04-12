@@ -29,17 +29,17 @@ def branching_def(**kwargs):
     else:
         return "skipped"
 
+
 branching = BranchPythonOperator(
-                                task_id="branching",
-                                provide_context=True,
-                                python_callable=branching_def,
-                                dag=dag,
-                                executor_config={"KubernetesExecutor": {"affinity": default_affinity()}})
+    task_id="branching",
+    provide_context=True,
+    python_callable=branching_def,
+    dag=dag,
+    executor_config={"KubernetesExecutor": {"affinity": default_affinity()}})
 
 skipped = DummyOperator(
     task_id="skipped",
     dag=dag)
-
 
 dbt_config_volume, dbt_config_volume_mount = volume_factory(name="dbt-test-profile",
                                                             claimName="dbt-test-profile",
@@ -48,12 +48,19 @@ dbt_config_volume, dbt_config_volume_mount = volume_factory(name="dbt-test-profi
                                                             read_only=True,
                                                             persistentVolumeClaim=False)
 
-dbt_test = RoofstockKubernetesPodOperator(dag=dag,
-                                          task_id="dbt_test",
-                                          code_folder=code_folder,
-                                          volumes=[dbt_config_volume],
-                                          volume_mounts=[dbt_config_volume_mount])
+dbt_test_pass = RoofstockKubernetesPodOperator(dag=dag,
+                                               task_id="dbt_test",
+                                               code_folder=code_folder,
+                                               volumes=[dbt_config_volume],
+                                               volume_mounts=[dbt_config_volume_mount],
+                                               python_kwargs={"model_name": "DBT_TEST"})
 
+dbt_test_fail = RoofstockKubernetesPodOperator(dag=dag,
+                                               task_id="dbt_test",
+                                               code_folder=code_folder,
+                                               volumes=[dbt_config_volume],
+                                               volume_mounts=[dbt_config_volume_mount],
+                                               python_kwargs={"model_name": "NOT_EXIST"})
 
-dbt_test >> attachment_to_s3 >> branching >> staging_to_s3 >> copy_to_snowflake
+dbt_test_pass >>  dbt_test_fail >> attachment_to_s3 >> branching >> staging_to_s3 >> copy_to_snowflake
 branching >> skipped

@@ -347,6 +347,8 @@ def copy_to_snowflake(logger, **kwargs):
 @run_with_logging()
 def dbt_test(logger, **kwargs):
 
+    model_name = kwargs["model_name"]
+
     def _run_command(command):
         process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         while True:
@@ -361,7 +363,7 @@ def dbt_test(logger, **kwargs):
 
     command = f"""
             cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/GreatSchools/dbt
-            dbt run --models DBT_TEST1 --profiles-dir /root/.dbt
+            dbt run --models {model_name} --profiles-dir /root/.dbt
           """
 
     return_code = _run_command(command)
