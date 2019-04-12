@@ -1,4 +1,5 @@
 import subprocess
+import sys
 
 from airflow.macros.roofstock_plugin import run_with_logging, connect_to_s3, connect_to_snowflake, pod_xcom_push, pod_xcom_pull
 from airflow.models import Variable
@@ -354,13 +355,18 @@ def dbt_test(logger, **kwargs):
                 break
             if output:
                 print(output.decode("utf-8").strip())
+        process.communicate()
+        return_code = process.returncode
+        return return_code
 
     command = f"""
             cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/GreatSchools/dbt
             dbt run --models DBT_TEST --profiles-dir /root/.dbt
           """
 
-    _run_command(command)
+    return_code = _run_command(command)
+    if not return_code:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
