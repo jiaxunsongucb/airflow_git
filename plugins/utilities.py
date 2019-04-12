@@ -81,6 +81,9 @@ def connect_to_snowflake(database, schema):
         "warehouse": Variable.get("SNOWFLAKE_WH")
     }
     con = snowflake.connector.connect(**conn_config)
+    # TODO
+    # parse schema
+    # logging real schema
     return con
 
 
