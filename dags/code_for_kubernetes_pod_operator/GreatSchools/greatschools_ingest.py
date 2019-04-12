@@ -356,20 +356,19 @@ def dbt_test(logger, **kwargs):
             if (not process.poll() and not output) or process.poll():
                 break
             if output:
-                logger.info(output.decode("utf-8").strip())
+                print(output.decode("utf-8").strip())
+
         process.communicate()
         return_code = process.returncode
-        return return_code
+        if return_code:
+            raise Exception(f"return code: {return_code}")
 
     command = f"""
             cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/GreatSchools/dbt
             dbt run --models {model_name} --profiles-dir /root/.dbt
           """
 
-    return_code = _run_command(command)
-    logger.info("return code:", return_code)
-    if return_code:
-        raise Exception(f"return code: {return_code}")
+    _run_command(command)
 
 
 if __name__ == "__main__":
