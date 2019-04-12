@@ -18,6 +18,7 @@ import os
 import requests
 import sys
 import json
+import subprocess
 
 # This is the class you derive to create a plugin
 from airflow.plugins_manager import AirflowPlugin
@@ -40,6 +41,29 @@ import snowflake.connector
 ###########################################################
 # Global helper functions
 ###########################################################
+
+def run_command(command):
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    last_output = ""
+    while True:
+        output = process.stdout.readline()
+        if (not process.poll() and not output) or process.poll():
+            break
+        if output:
+            last_output = output.decode("utf-8").strip()
+            print(last_output)
+
+    process.communicate()
+    return_code = process.returncode
+    return return_code, last_output
+
+
+def run_dbt(dbt_command):
+    return_code, last_output = run_command(dbt_command)
+    if return_code or "WARNING" in last_output or "PASS=0" in last_output:
+        raise Exception(f"dbt failed!")
+
+
 def pd_read_s3(bucket, key, s3_client, *args, **kwargs):
     """
     Function
@@ -672,7 +696,7 @@ class AirflowPlugin(AirflowPlugin):
     # A list of class(es) derived from BaseExecutor
     executors = []
     # A list of references to inject into the macros namespace
-    macros = [send_slack_message, create_logger, pd_read_s3, send_message, run_with_logging,
+    macros = [send_slack_message, create_logger, pd_read_s3, send_message, run_with_logging, run_command, run_dbt,
               connect_to_s3, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, default_affinity, volume_factory]
     # A list of objects created from a class derived
     # from flask_admin.BaseView

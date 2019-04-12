@@ -1,7 +1,7 @@
 import subprocess
 import sys
 
-from airflow.macros.roofstock_plugin import run_with_logging, connect_to_s3, connect_to_snowflake, pod_xcom_push, pod_xcom_pull
+from airflow.macros.roofstock_plugin import run_with_logging, connect_to_s3, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, run_dbt
 from airflow.models import Variable
 import pandas as pd
 import requests
@@ -346,37 +346,20 @@ def copy_to_snowflake(logger, **kwargs):
 
 @run_with_logging()
 def dbt_test(logger, **kwargs):
-
     model_name = kwargs["model_name"]
-
-    def _run_command(command):
-        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-        while True:
-            output = process.stdout.readline()
-            if (not process.poll() and not output) or process.poll():
-                break
-            if output:
-                print(output.decode("utf-8").strip())
-
-        process.communicate()
-        return_code = process.returncode
-        if return_code:
-            raise Exception(f"return code: {return_code}")
-
-        return return_code, output.decode("utf-8").strip()
-
     command = f"""
             cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/GreatSchools/dbt
             dbt run --models {model_name} --profiles-dir /root/.dbt
           """
-
-    return_code, last_output = _run_command(command)
-    if "WARNING" in last_output or "PASS=0" in last_output:
-        raise Exception(f"dbt failed!")
+    # command = f"""
+    #         cd /Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/dags/code_for_kubernetes_pod_operator/GreatSchools/dbt
+    #         dbt run --models {model_name} --profiles-dir /Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/.dbt
+    #       """
+    run_dbt(command)
 
 
 if __name__ == "__main__":
     # attachment_to_s3()
     # staging_to_s3()
     # copy_to_snowflake()
-    dbt_test()
+    dbt_test(**{"model_name":"DBT_TEST"})
