@@ -357,7 +357,6 @@ def dbt_test(logger, **kwargs):
 
     command = f"""
             cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/GreatSchools/dbt
-            cat /root/.dbt/profiles.yml
             dbt run --models DBT_TEST --profiles-dir /root/.dbt
           """
 
