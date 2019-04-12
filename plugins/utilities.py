@@ -626,7 +626,7 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
                                                                         "airflow-code-claim",
                                                                         "/root/airflow/code",
                                                                         f"{env_name}/code",
-                                                                        True)
+                                                                        False)
         airflow_logs_volume, airflow_logs_volume_mount = volume_factory("airflow-logs",
                                                                         "airflow-logs-claim",
                                                                         "/root/airflow/logs",
