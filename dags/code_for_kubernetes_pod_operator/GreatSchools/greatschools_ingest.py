@@ -363,7 +363,7 @@ def dbt_test(logger, **kwargs):
         if return_code:
             raise Exception(f"return code: {return_code}")
 
-        return return_code, output
+        return return_code, output.decode("utf-8").strip()
 
     command = f"""
             cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/GreatSchools/dbt
