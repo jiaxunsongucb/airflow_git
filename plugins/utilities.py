@@ -608,11 +608,11 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
 
     @property
     def default_arguments(self):
-        info = (f"Code location: /root/airflow/code/dags/code_for_kubernetes_pod_operator/{self.code_folder}\n"
-                f"Script name: {self.script_name}.py\n"
-                f"Function name: {self.python_callable}\n"
+        info = (f"Code location: /root/airflow/code/dags/code_for_kubernetes_pod_operator/{self.code_folder}\\n"
+                f"Script name: {self.script_name}.py\\n"
+                f"Function name: {self.python_callable}\\n"
                 f"kwargs: {self.python_kwargs}")
-        return [(f'echo {info} && '
+        return [(f'echo $"{info}"" && '
                  f'cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/{self.code_folder} && '
                  f'python -c "from {self.script_name} import *; {self.python_callable}(**{self.python_kwargs})"')]
 

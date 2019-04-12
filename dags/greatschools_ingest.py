@@ -21,7 +21,7 @@ staging_to_s3 = RoofstockKubernetesPodOperator(dag=dag, task_id="staging_to_s3",
 copy_to_snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_to_snowflake", code_folder=code_folder)
 
 
-def branching_def():
+def branching_def(**kwargs):
     stage_location = pod_xcom_pull("greatschools_ingest", "attachment_to_s3", "stage_location")
     print(f"Got stage loaction: {stage_location}")
     if stage_location:
