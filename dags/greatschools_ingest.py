@@ -16,11 +16,12 @@ default_args = {
 dag = DAG('greatschools_ingest', default_args=default_args, schedule_interval=timedelta(minutes=100))
 
 code_folder = "GreatSchools"
-attachment_to_s3 = RoofstockKubernetesPodOperator(dag=dag, task_id="attachment_to_s3", code_folder=code_folder)
+attachment_to_s3 = RoofstockKubernetesPodOperator(dag=dag, task_id="attachment_to_s3", code_folder=code_folder, python_kwargs={"test": "If you see this, I will be happy!"})
 staging_to_s3 = RoofstockKubernetesPodOperator(dag=dag, task_id="staging_to_s3", code_folder=code_folder)
 copy_to_snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_to_snowflake", code_folder=code_folder)
 
-def branching_def(**kwargs):
+
+def branching_def():
     stage_location = pod_xcom_pull("greatschools_ingest", "attachment_to_s3", "stage_location")
     print(f"Got stage loaction: {stage_location}")
     if stage_location:

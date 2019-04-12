@@ -238,7 +238,7 @@ def run_with_logging(tz="US/Pacific"):
             # save all stdout to the logger
             sys.stdout = LoggerWriter(logger, logging.INFO)
             try:
-                result = func(logger)
+                result = func(logger, **kwargs)
                 logger.info("Process finished with exit code 0")
                 logger.removeHandler(logger.handlers[0])
                 return result
@@ -505,6 +505,7 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
                  code_folder,
                  script_name=str(),
                  python_callable=str(),
+                 python_kwargs={},
                  image=str(),
                  namespace=str(),
                  cmds=[],
@@ -539,6 +540,7 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
         super(KubernetesPodOperator, self).__init__(*args, **kwargs)
         self.script_name = script_name or self.dag_id
         self.python_callable = python_callable or self.task_id
+        self.python_kwargs = python_kwargs
         self.image = image or "jiaxun/datatools:general_purpose"
         self.namespace = namespace or conf.get("kubernetes", "namespace")
         self.code_folder = code_folder
@@ -608,7 +610,7 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
     @property
     def default_arguments(self):
         return [(f"cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/{self.code_folder}"
-                 f"&& python -c 'from {self.script_name} import *; {self.python_callable}()'")]
+                 f"&& python -c 'from {self.script_name} import *; {self.python_callable}(**{self.python_kwargs})'")]
 
     @property
     def default_env_vars(self):

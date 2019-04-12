@@ -17,7 +17,7 @@ pd.set_option('display.max_columns', 100)
 
 
 @run_with_logging()
-def attachment_to_s3(logger):
+def attachment_to_s3(logger, **kwargs):
     """
     Function
     ----------------------
@@ -33,6 +33,7 @@ def attachment_to_s3(logger):
     ----------------------
     None
     """
+    logger.ingo(kwargs["test"])
     # get airflow env
     AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
 
@@ -126,7 +127,7 @@ def attachment_to_s3(logger):
 
 
 @run_with_logging()
-def staging_to_s3(logger):
+def staging_to_s3(logger, **kwargs):
     """
     Function
     ----------------------
@@ -202,7 +203,7 @@ def staging_to_s3(logger):
 
 
 @run_with_logging()
-def copy_to_snowflake(logger):
+def copy_to_snowflake(logger, **kwargs):
     """
     Function
     ----------------------

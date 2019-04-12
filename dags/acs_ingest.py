@@ -20,6 +20,10 @@ default_args = {
 dag = DAG('acs_ingest', default_args=default_args, schedule_interval=timedelta(minutes=100))
 
 code_folder = "ACS"
+
+# --------------------------------------------------------
+# Transfer data from FTP to S3
+
 docs_FTP_to_S3 = RoofstockKubernetesPodOperator(dag=dag, task_id="docs_FTP_to_S3", code_folder=code_folder)
 template_FTP_to_S3 = RoofstockKubernetesPodOperator(dag=dag, task_id="template_FTP_to_S3", code_folder=code_folder)
 
@@ -57,6 +61,9 @@ sequence_FTP_to_S3 = SubDagOperator(dag=dag,
                                     task_id="sequence_FTP_to_S3",
                                     subdag=subdag_transfer_sequence('acs_ingest', 'sequence_FTP_to_S3', default_args))
 
+# --------------------------------------------------------
+# Populate database
+
 copy_geo_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_geo_S3_to_Snowflake", code_folder=code_folder)
 copy_lookup_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_lookup_S3_to_Snowflake", code_folder=code_folder)
 
@@ -86,6 +93,8 @@ copy_sequence_S3_to_Snowflake = SubDagOperator(dag=dag,
                                                task_id="copy_sequence_S3_to_Snowflake",
                                                subdag=subdag_copy_sequence('acs_ingest', 'copy_sequence_S3_to_Snowflake', default_args))
 
+# --------------------------------------------------------
+# Update VARIABLE_LISTS and FACT tables
 update_geometa = RoofstockKubernetesPodOperator(dag=dag, task_id="update_geometa", code_folder=code_folder)
 
 
@@ -111,7 +120,7 @@ def subdag_update_fact_on_Snowflake(parent_dag_name, child_dag_name, default_arg
         dag=dag_subdag,
         wait_for_downstream=True,
         provide_context=True,
-        op_kwargs={"year": year}
+        env_vars={"year": year}
     )
 
     create_fact_table_on_Snowflake = RoofstockKubernetesPodOperator(
@@ -130,7 +139,7 @@ def subdag_update_fact_on_Snowflake(parent_dag_name, child_dag_name, default_arg
         dag=dag_subdag,
         wait_for_downstream=True,
         provide_context=True,
-        op_kwargs={"year": year}
+        env_vars={"year": year}
     )
 
     variable_list_to_S3 >> variable_list_to_Snowflake >> create_fact_table_on_Snowflake >> variables_from_raw_tables
