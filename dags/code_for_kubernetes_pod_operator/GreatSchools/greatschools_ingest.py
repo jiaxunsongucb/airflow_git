@@ -356,7 +356,7 @@ def dbt_test(logger, **kwargs):
             if (not process.poll() and not output) or process.poll():
                 break
             if output:
-                print(output.decode("utf-8").strip())
+                logger.info(output.decode("utf-8").strip())
         process.communicate()
         return_code = process.returncode
         return return_code
@@ -367,7 +367,7 @@ def dbt_test(logger, **kwargs):
           """
 
     return_code = _run_command(command)
-    print("return code:", return_code)
+    logger.info("return code:", return_code)
     if return_code:
         raise Exception(f"return code: {return_code}")
 
