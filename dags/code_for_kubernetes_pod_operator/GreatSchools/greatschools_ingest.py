@@ -365,6 +365,7 @@ def dbt_test(logger, **kwargs):
           """
 
     return_code = _run_command(command)
+    print("return code:", return_code)
     if not return_code:
         sys.exit(1)
 
