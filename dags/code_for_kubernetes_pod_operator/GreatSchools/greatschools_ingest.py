@@ -363,12 +363,16 @@ def dbt_test(logger, **kwargs):
         if return_code:
             raise Exception(f"return code: {return_code}")
 
+        return return_code, output
+
     command = f"""
             cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/GreatSchools/dbt
             dbt run --models {model_name} --profiles-dir /root/.dbt
           """
 
-    _run_command(command)
+    return_code, last_output = _run_command(command)
+    if "WARNING" in last_output or "PASS=0" in last_output:
+        raise Exception(f"dbt failed!")
 
 
 if __name__ == "__main__":
