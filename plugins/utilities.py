@@ -560,7 +560,7 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
         self.node_selectors = node_selectors
         self.annotations = annotations
         self.affinity = affinity or self.default_affinity
-        self.do_xcom_push = do_xcom_push
+        self.do_xcom_push = self.xcom_push = do_xcom_push
         self.resources = resources or self.default_resources
         self.config_file = config_file
         self.image_pull_secrets = image_pull_secrets
@@ -608,10 +608,10 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
 
     @property
     def default_arguments(self):
-        print("Code location: /root/airflow/code/dags/code_for_kubernetes_pod_operator/{self.code_folder}")
-        print("Script name: {self.script_name}.py")
-        print("Function name: {self.python_callable}")
-        print("kwargs: {self.python_kwargs}")
+        print(f"Code location: /root/airflow/code/dags/code_for_kubernetes_pod_operator/{self.code_folder}")
+        print(f"Script name: {self.script_name}.py")
+        print(f"Function name: {self.python_callable}")
+        print(f"kwargs: {self.python_kwargs}")
         return [(f'cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/{self.code_folder} && '
                  f'python -c "from {self.script_name} import *; {self.python_callable}(**{self.python_kwargs})"')]
 
