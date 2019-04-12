@@ -33,6 +33,7 @@ def attachment_to_s3(logger, **kwargs):
     ----------------------
     None
     """
+    print(kwargs)
     logger.info(kwargs["test"])
     # get airflow env
     AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
