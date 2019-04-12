@@ -1,7 +1,7 @@
 from airflow import DAG
 from datetime import datetime, timedelta
 from airflow.operators.roofstock_plugin import RoofstockKubernetesPodOperator
-from airflow.macros.roofstock_plugin import pod_xcom_pull, default_affinity
+from airflow.macros.roofstock_plugin import pod_xcom_pull, default_affinity, volume_factory
 from airflow.operators.python_operator import BranchPythonOperator
 from airflow.operators.dummy_operator import DummyOperator
 
@@ -40,5 +40,20 @@ skipped = DummyOperator(
     task_id="skipped",
     dag=dag)
 
-attachment_to_s3 >> branching >> staging_to_s3 >> copy_to_snowflake
+
+dbt_config_volume, dbt_config_volume_mount = volume_factory(name="dbt-test-profile",
+                                                            claimName="dbt-test-profile",
+                                                            mount_path="/root/.dbt/profiles.yml",
+                                                            sub_path="profiles_test1.yml",
+                                                            read_only=True,
+                                                            persistentVolumeClaim=False)
+
+dbt_test = RoofstockKubernetesPodOperator(dag=dag,
+                                          task_id="dbt_test",
+                                          code_folder=code_folder,
+                                          volumes=[dbt_config_volume],
+                                          volume_mounts=[dbt_config_volume_mount])
+
+
+dbt_test >> attachment_to_s3 >> branching >> staging_to_s3 >> copy_to_snowflake
 branching >> skipped

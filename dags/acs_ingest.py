@@ -1,13 +1,11 @@
 from airflow import DAG
 from datetime import datetime, timedelta
 from airflow.operators.roofstock_plugin import RoofstockKubernetesPodOperator
-from airflow.macros.roofstock_plugin import pod_xcom_pull, default_affinity
+from airflow.macros.roofstock_plugin import volume_factory, pod_xcom_pull, default_affinity
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.subdag_operator import SubDagOperator
 
-
 year = 2017
-
 
 default_args = {
     'owner': 'jsong',
@@ -20,6 +18,13 @@ default_args = {
 dag = DAG('acs_ingest', default_args=default_args, schedule_interval=timedelta(minutes=100))
 
 code_folder = "ACS"
+
+dbt_config_volume, dbt_config_volume_mount = volume_factory(name="dbt-config",
+                                                            claimName="dbt-acs-ingest",
+                                                            mount_path="/root/airflow/.dbt",
+                                                            sub_path=".dbt",
+                                                            read_only=True,
+                                                            persistentVolumeClaim=False)
 
 # --------------------------------------------------------
 # Transfer data from FTP to S3
@@ -64,15 +69,17 @@ sequence_FTP_to_S3 = SubDagOperator(dag=dag,
 # --------------------------------------------------------
 # Populate database
 
-copy_geo_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_geo_S3_to_Snowflake", code_folder=code_folder)
-copy_lookup_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_lookup_S3_to_Snowflake", code_folder=code_folder)
+copy_geo_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_geo_S3_to_Snowflake",
+                                                          code_folder=code_folder)
+copy_lookup_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_lookup_S3_to_Snowflake",
+                                                             code_folder=code_folder)
 
 
 def subdag_copy_sequence(parent_dag_name, child_dag_name, default_args):
     dag_subdag = DAG(
         dag_id=f"{parent_dag_name}.{child_dag_name}",
         default_args=default_args
-        )
+    )
 
     for sequence in range(1, 150):
         RoofstockKubernetesPodOperator(
@@ -84,14 +91,16 @@ def subdag_copy_sequence(parent_dag_name, child_dag_name, default_args):
             wait_for_downstream=True,
             provide_context=True,
             env_vars={"year": year, "sequence": sequence}
-            )
+        )
 
     return dag_subdag
 
 
 copy_sequence_S3_to_Snowflake = SubDagOperator(dag=dag,
                                                task_id="copy_sequence_S3_to_Snowflake",
-                                               subdag=subdag_copy_sequence('acs_ingest', 'copy_sequence_S3_to_Snowflake', default_args))
+                                               subdag=subdag_copy_sequence('acs_ingest',
+                                                                           'copy_sequence_S3_to_Snowflake',
+                                                                           default_args))
 
 # --------------------------------------------------------
 # Update VARIABLE_LISTS and FACT tables

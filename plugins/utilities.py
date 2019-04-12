@@ -424,6 +424,34 @@ def default_affinity():
     }
     return affinity
 
+
+def volume_factory(name, claimName, mount_path, sub_path, read_only=True, persistentVolumeClaim=True):
+    if persistentVolumeClaim:
+        volume_config = {
+            'persistentVolumeClaim':
+                {
+                    'claimName': claimName
+                }
+        }
+    else:
+        volume_config = {
+            'configMap':
+                {
+                    'name': claimName,
+                    'defaultMode': 420
+                }
+        }
+
+    volume = Volume(name=name, configs=volume_config)
+
+    volume_mount = VolumeMount(name=name,
+                               mount_path=mount_path,
+                               sub_path=sub_path,
+                               read_only=read_only)
+
+    return volume, volume_mount
+
+
 ###########################################################
 # Airflow Plugin Operators
 ###########################################################
@@ -550,8 +578,8 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
         self.startup_timeout_seconds = startup_timeout_seconds or 300
         self.name = name or self.default_name
         self.env_vars = {**env_vars, **self.default_env_vars}
-        self.volume_mounts = volume_mounts or self.default_volumes_and_volume_mounts[0]
-        self.volumes = volumes or self.default_volumes_and_volume_mounts[1]
+        self.volume_mounts = volume_mounts + self.default_volumes_and_volume_mounts[0]
+        self.volumes = volumes + self.default_volumes_and_volume_mounts[1]
         self.secrets = secrets
         self.in_cluster = in_cluster
         self.cluster_context = cluster_context
@@ -571,33 +599,6 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
         self.configmaps = configmaps
         self.security_context = security_context
         self.executor_config = self.default_executor_config
-
-    @staticmethod
-    def _volume_factory(name, claimName, mount_path, sub_path, read_only=True, persistentVolumeClaim=True):
-        if persistentVolumeClaim:
-            volume_config = {
-                'persistentVolumeClaim':
-                    {
-                        'claimName': claimName
-                    }
-            }
-        else:
-            volume_config = {
-                'configMap':
-                    {
-                        'name': claimName,
-                        'defaultMode': 420
-                    }
-            }
-
-        volume = Volume(name=name, configs=volume_config)
-
-        volume_mount = VolumeMount(name=name,
-                                   mount_path=mount_path,
-                                   sub_path=sub_path,
-                                   read_only=read_only)
-
-        return volume, volume_mount
 
     @property
     def default_name(self):
@@ -621,22 +622,22 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
     @property
     def default_volumes_and_volume_mounts(self):
         env_name = self.namespace.replace("airflow-", "")
-        airflow_code_volume, airflow_code_volume_mount = self._volume_factory("airflow-code",
-                                                                              "airflow-code-claim",
-                                                                              "/root/airflow/code",
-                                                                              f"{env_name}/code",
-                                                                              True)
-        airflow_logs_volume, airflow_logs_volume_mount = self._volume_factory("airflow-logs",
-                                                                              "airflow-logs-claim",
-                                                                              "/root/airflow/logs",
-                                                                              f"{env_name}/logs",
-                                                                              False)
-        airflow_config_volume, airflow_config_volume_mount = self._volume_factory("airflow-config",
-                                                                                  "airflow-configmap",
-                                                                                  "/root/airflow/airflow.cfg",
-                                                                                  "airflow.cfg",
-                                                                                  True,
-                                                                                  False)
+        airflow_code_volume, airflow_code_volume_mount = volume_factory("airflow-code",
+                                                                        "airflow-code-claim",
+                                                                        "/root/airflow/code",
+                                                                        f"{env_name}/code",
+                                                                        True)
+        airflow_logs_volume, airflow_logs_volume_mount = volume_factory("airflow-logs",
+                                                                        "airflow-logs-claim",
+                                                                        "/root/airflow/logs",
+                                                                        f"{env_name}/logs",
+                                                                        False)
+        airflow_config_volume, airflow_config_volume_mount = volume_factory("airflow-config",
+                                                                            "airflow-configmap",
+                                                                            "/root/airflow/airflow.cfg",
+                                                                            "airflow.cfg",
+                                                                            True,
+                                                                            False)
 
         return ([airflow_code_volume_mount, airflow_logs_volume_mount, airflow_config_volume_mount],
                 [airflow_code_volume, airflow_logs_volume, airflow_config_volume])
@@ -669,7 +670,7 @@ class AirflowPlugin(AirflowPlugin):
     executors = []
     # A list of references to inject into the macros namespace
     macros = [send_slack_message, create_logger, pd_read_s3, send_message, run_with_logging,
-              connect_to_s3, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, default_affinity]
+              connect_to_s3, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, default_affinity, volume_factory]
     # A list of objects created from a class derived
     # from flask_admin.BaseView
     admin_views = []

@@ -1,3 +1,5 @@
+import subprocess
+
 from airflow.macros.roofstock_plugin import run_with_logging, connect_to_s3, connect_to_snowflake, pod_xcom_push, pod_xcom_pull
 from airflow.models import Variable
 import pandas as pd
@@ -341,7 +343,29 @@ def copy_to_snowflake(logger, **kwargs):
     con.close()
 
 
+@run_with_logging()
+def dbt_test(logger, **kwargs):
+
+    def _run_command(command):
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        while True:
+            output = process.stdout.readline()
+            if (not process.poll() and not output) or process.poll():
+                break
+            if output:
+                print(output.decode("utf-8").strip())
+
+    command = f"""
+            cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/GreatSchools/dbt
+            cat /root/.dbt/profiles.yml
+            dbt run --models DBT_TEST --profiles-dir /root/.dbt
+          """
+
+    _run_command(command)
+
+
 if __name__ == "__main__":
     # attachment_to_s3()
     # staging_to_s3()
-    copy_to_snowflake()
+    # copy_to_snowflake()
+    dbt_test()

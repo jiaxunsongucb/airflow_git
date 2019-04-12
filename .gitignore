@@ -118,3 +118,4 @@ dmypy.json
 *.pid
 logs/
 unittests.cfg
+.dbt/

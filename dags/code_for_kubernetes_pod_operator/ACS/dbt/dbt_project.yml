@@ -1,0 +1,57 @@
+
+# Name your package! Package names should contain only lowercase characters
+# and underscores. A good package name should reflect your organization's
+# name or the intended use of these models
+name: 'acs_ingest'
+version: '1.0'
+
+# This setting configures which "profile" dbt uses for this project. Profiles contain
+# database connection information, and should be configured in the  ~/.dbt/profiles.yml file
+profile: 'acs_ingest'
+
+# These configurations specify where dbt should look for different types of files.
+# The `source-paths` config, for example, states that source models can be found
+# in the "models/" directory. You probably won't need to change these!
+source-paths: ["models"]
+analysis-paths: ["analysis"] 
+test-paths: ["tests"]
+data-paths: ["data"]
+macro-paths: ["macros"]
+
+target-path: "target"  # directory which will store compiled SQL files
+clean-targets:         # directories to be removed by `dbt clean`
+    - "target"
+    - "dbt_modules"
+
+# You can define configurations for models in the `source-paths` directory here.
+# Using these configurations, you can enable or disable models, change how they
+# are materialized, and more!
+
+# In this example config, we tell dbt to build all models in the example/ directory
+# as views (the default). These settings can be overridden in the individual model files
+# using the `{{ config(...) }}` macro.
+models:
+  acs_ingest:
+      ACS_BY_GROUP_TEMP:
+          materialized: table
+          post-hook: "GRANT ALL ON TABLE {{ this }} TO ROLE DATASCIENCE_ROLE;"
+      GEOMETA:
+          materialized: table
+          # it seems like the post-hook only works when it is defined here.
+          # it does not work in the model .sql files.
+          post-hook: [ "DELETE FROM {{ this }} WHERE year = 9999;",
+                       "UPDATE {{ this }} SET State = 'NA' WHERE State IS NULL;",
+                       "UPDATE {{ this }} SET County = 'NA' WHERE County IS NULL;",
+                       "UPDATE {{ this }} SET Census_Tract = 'NA' WHERE Census_Tract IS NULL;",
+                       "UPDATE {{ this }} SET Block_Group = 'NA' WHERE Block_Group IS NULL;",
+                       "UPDATE {{ this }} SET CBSA = 'NA' WHERE CBSA IS NULL;",
+                       "UPDATE {{ this }} SET ZCTA = 'NA' WHERE ZCTA IS NULL;",
+                       "GRANT USAGE ON SCHEMA {{ this.schema }} to ROLE DATASCIENCE_ROLE;",
+                       "GRANT USAGE ON SCHEMA {{ this.schema }} to ROLE ANALYST_ROLE;",
+                       "GRANT USAGE ON SCHEMA {{ this.schema }} to ROLE BUSINESS_ROLE;",
+                       "GRANT ALL ON SCHEMA {{ this.schema }} to ROLE DATAENGINEERING_ROLE;",
+                       "GRANT SELECT ON TABLE {{ this }} TO ROLE DATASCIENCE_ROLE;",
+                       "GRANT SELECT ON TABLE {{ this }} TO ROLE ANALYST_ROLE;",
+                       "GRANT SELECT ON TABLE {{ this }} TO ROLE BUSINESS_ROLE;",
+                       "GRANT ALL ON TABLE {{ this }} TO ROLE DATAENGINEERING_ROLE;"
+                     ]
