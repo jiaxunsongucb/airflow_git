@@ -206,11 +206,9 @@ def copy_to_snowflake(logger, **kwargs):
     ----------------------
     None
     """
-    dag_id = kwargs.get("dag_id", "test_dag")
-    task_id = kwargs.get("task_id", "test_task")
-
     # Initialize variables
-    s3_folder = pod_xcom_pull(dag_id, task_id, "stage_location")
+    dag_id = kwargs.get("dag_id", "test_dag")
+    s3_folder = pod_xcom_pull(dag_id, "attachment_to_s3", "stage_location")
     logger.info(f"Got stage loaction: {s3_folder}")
     s3_subfolder = s3_folder.replace("RawData/GreatSchools/", "")
 

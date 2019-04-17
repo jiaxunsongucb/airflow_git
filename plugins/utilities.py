@@ -110,12 +110,16 @@ def connect_to_snowflake(database, schema):
     return con
 
 
-def connect_to_s3_bucket():
+def connect_to_s3():
     AWS_ACCESS_KEY_ID = Variable.get("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = Variable.get("AWS_SECRET_ACCESS_KEY").replace("/", "%2F")
     os.environ["AIRFLOW_CONN_AWS_DEFAULT"] = f's3://{AWS_ACCESS_KEY_ID}:{AWS_SECRET_ACCESS_KEY}@s3'
     s3hook = S3Hook()
+    return s3hook
 
+
+def connect_to_s3_bucket():
+    s3hook = connect_to_s3()
     AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
     AWS_S3_BUCKET_NAME = Variable.get("AWS_S3_BUCKET_NAME") if AIRFLOW_ENV == "PROD" else Variable.get("AWS_S3_BUCKET_NAME_DEV")
     mybucket = s3hook.get_bucket(AWS_S3_BUCKET_NAME)
@@ -703,7 +707,8 @@ class AirflowPlugin(AirflowPlugin):
     executors = []
     # A list of references to inject into the macros namespace
     macros = [send_slack_message, create_logger, pd_read_s3, send_message, run_with_logging, run_command, run_dbt,
-              connect_to_s3_bucket, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, default_affinity, volume_factory]
+              connect_to_s3, connect_to_s3_bucket, connect_to_snowflake,
+              pod_xcom_push, pod_xcom_pull, default_affinity, volume_factory]
     # A list of objects created from a class derived
     # from flask_admin.BaseView
     admin_views = []
