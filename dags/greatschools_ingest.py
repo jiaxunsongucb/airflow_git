@@ -41,10 +41,10 @@ skipped = DummyOperator(
     task_id="skipped",
     dag=dag)
 
-dbt_config_volume, dbt_config_volume_mount = volume_factory(name="dbt-test-profile",
-                                                            claimName="dbt-test-profile",
+dbt_config_volume, dbt_config_volume_mount = volume_factory(name="dbt-profiles",
+                                                            claimName="dbt-profiles",
                                                             mount_path="/root/.dbt/profiles.yml",
-                                                            sub_path="profiles_test1.yml",
+                                                            sub_path="profiles_test.yml",
                                                             read_only=True,
                                                             persistentVolumeClaim=False)
 
