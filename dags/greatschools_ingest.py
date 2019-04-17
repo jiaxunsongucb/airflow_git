@@ -56,13 +56,5 @@ dbt_test_pass = RoofstockKubernetesPodOperator(dag=dag,
                                                volume_mounts=[dbt_config_volume_mount],
                                                python_kwargs={"model_name": "DBT_TEST"})
 
-dbt_test_fail = RoofstockKubernetesPodOperator(dag=dag,
-                                               task_id="dbt_test_fail",
-                                               python_callable="dbt_test",
-                                               code_folder=code_folder,
-                                               volumes=[dbt_config_volume],
-                                               volume_mounts=[dbt_config_volume_mount],
-                                               python_kwargs={"model_name": "DBT_TEST"})
-
-dbt_test_pass >> dbt_test_fail >> attachment_to_s3 >> branching >> staging_to_s3 >> copy_to_snowflake
+dbt_test_pass >> attachment_to_s3 >> branching >> staging_to_s3 >> copy_to_snowflake
 branching >> skipped
