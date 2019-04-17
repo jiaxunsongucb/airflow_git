@@ -138,8 +138,7 @@ def staging_to_s3(logger, **kwargs):
     """
     # Initialize variables
     dag_id = kwargs.get("dag_id", "test_dag")
-    task_id = kwargs.get("task_id", "test_task")
-    s3_folder = pod_xcom_pull(dag_id, task_id, "stage_location")
+    s3_folder = pod_xcom_pull(dag_id, "attachment_to_s3", "stage_location")
     logger.info(f"Got stage loaction: {s3_folder}")
 
     GREATSCHOOLS_USERNAME = Variable.get("GREATSCHOOLS_USERNAME")

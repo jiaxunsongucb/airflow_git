@@ -137,7 +137,10 @@ def pod_xcom_pull(dag_id, task_id, key):
     execution_date = timezone.utcnow()
     xcom_obj = XCom()
     result = xcom_obj.get_one(execution_date, key, task_id, dag_id, include_prior_dates=True)
-    return result
+    if result:
+        return result
+    else:
+        raise Exception(f"Couldn't find XCom for DAG {dag_id}, task {task_id}, key {key}!")
 
 
 def create_logger(tz="UTC"):
