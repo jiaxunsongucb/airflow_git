@@ -96,6 +96,8 @@ def pd_read_s3(bucket, key, s3_client, *args, **kwargs):
 
 
 def connect_to_snowflake(database, schema):
+    AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
+    schema = schema if AIRFLOW_ENV == "PROD" else AIRFLOW_ENV + "_" + schema
     conn_config = {
         "user": Variable.get("SNOWFLAKE_USER"),
         "password": Variable.get("SNOWFLAKE_PASSWORD"),
@@ -105,18 +107,19 @@ def connect_to_snowflake(database, schema):
         "warehouse": Variable.get("SNOWFLAKE_WH")
     }
     con = snowflake.connector.connect(**conn_config)
-    # TODO
-    # parse schema
-    # logging real schema
     return con
 
 
-def connect_to_s3():
+def connect_to_s3_bucket():
     AWS_ACCESS_KEY_ID = Variable.get("AWS_ACCESS_KEY_ID")
     AWS_SECRET_ACCESS_KEY = Variable.get("AWS_SECRET_ACCESS_KEY").replace("/", "%2F")
     os.environ["AIRFLOW_CONN_AWS_DEFAULT"] = f's3://{AWS_ACCESS_KEY_ID}:{AWS_SECRET_ACCESS_KEY}@s3'
     s3hook = S3Hook()
-    return s3hook
+
+    AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
+    AWS_S3_BUCKET_NAME = Variable.get("AWS_S3_BUCKET_NAME") if AIRFLOW_ENV == "PROD" else Variable.get("AWS_S3_BUCKET_NAME_DEV")
+    mybucket = s3hook.get_bucket(AWS_S3_BUCKET_NAME)
+    return mybucket
 
 
 def pod_xcom_push(xcom: dict):
@@ -595,7 +598,7 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
         super(KubernetesPodOperator, self).__init__(*args, **kwargs)
         self.script_name = script_name or self.dag_id
         self.python_callable = python_callable or self.task_id
-        self.python_kwargs = python_kwargs
+        self.python_kwargs = {**python_kwargs, **self.default_env_vars}
         self.image = image or "jiaxun/datatools:general_purpose"
         self.namespace = namespace or conf.get("kubernetes", "namespace")
         self.code_folder = code_folder
@@ -697,7 +700,7 @@ class AirflowPlugin(AirflowPlugin):
     executors = []
     # A list of references to inject into the macros namespace
     macros = [send_slack_message, create_logger, pd_read_s3, send_message, run_with_logging, run_command, run_dbt,
-              connect_to_s3, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, default_affinity, volume_factory]
+              connect_to_s3_bucket, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, default_affinity, volume_factory]
     # A list of objects created from a class derived
     # from flask_admin.BaseView
     admin_views = []

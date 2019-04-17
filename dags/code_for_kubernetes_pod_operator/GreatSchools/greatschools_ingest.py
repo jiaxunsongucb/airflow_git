@@ -1,7 +1,4 @@
-import subprocess
-import sys
-
-from airflow.macros.roofstock_plugin import run_with_logging, connect_to_s3, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, run_dbt
+from airflow.macros.roofstock_plugin import run_with_logging, connect_to_s3_bucket, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, run_dbt
 from airflow.models import Variable
 import pandas as pd
 import requests
@@ -17,6 +14,12 @@ import time
 pd.set_option('display.max_rows', 100)
 pd.set_option('display.max_columns', 100)
 # pd.set_option('display.width', 5)
+
+# setup S3
+mybucket = connect_to_s3_bucket()
+
+# setup Snowflake
+con = connect_to_snowflake(database="SCHOOLSCORES_DB", schema="RAW_GREATSCHOOLS")
 
 
 @run_with_logging()
@@ -36,18 +39,6 @@ def attachment_to_s3(logger, **kwargs):
     ----------------------
     None
     """
-    # get airflow env
-    AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
-
-    # setup S3
-    s3hook = connect_to_s3()
-    AWS_S3_BUCKET_NAME = Variable.get("AWS_S3_NAME")
-
-    # setup Snowflake
-    DATABASE = "SCHOOLSCORES_DB"
-    SCHEMA = "RAW_GREATSCHOOLS" if AIRFLOW_ENV == "PROD" else AIRFLOW_ENV + "_" + "RAW_GREATSCHOOLS"
-    con = connect_to_snowflake(database=DATABASE, schema=SCHEMA)
-
     # load tracker file (a csv file tracks the download history)
     # create the schema and table on snowflake first!
     greatschools_tracker = pd.read_sql_query("SELECT * FROM DOWNLOAD_HISTORY", con)
@@ -76,10 +67,7 @@ def attachment_to_s3(logger, **kwargs):
         email_datetime = datetime.strptime(time.strftime("%Y-%m-%d %H:%M:%S", email.utils.parsedate(msg["Date"])),
                                            "%Y-%m-%d %H:%M:%S")
 
-        if AIRFLOW_ENV == "PROD":
-            stage_location = f"RawData/GreatSchools/{email_datetime.strftime('%Y%m%d')}"
-        else:
-            stage_location = f"RawData/GreatSchools/{AIRFLOW_ENV}/{email_datetime.strftime('%Y%m%d')}"
+        stage_location = f"RawData/GreatSchools/{email_datetime.strftime('%Y%m%d')}"
 
         email_subject = msg["Subject"]
         is_feed_update = "GreatSchools Feed Update" in email_subject
@@ -117,7 +105,7 @@ def attachment_to_s3(logger, **kwargs):
 
             # download attachment
             s3_path = f"{stage_location}/{filename}"
-            s3hook.load_file_obj(file_obj=io.BytesIO(data), key=s3_path, bucket_name=AWS_S3_BUCKET_NAME, replace=True)
+            mybucket.put_object(Key=s3_path, Body=io.BytesIO(data))
 
     # Push XComs
     xcom = {"stage_location": stage_location if has_update else ""}
@@ -149,13 +137,13 @@ def staging_to_s3(logger, **kwargs):
     None
     """
     # Initialize variables
-    s3_folder = pod_xcom_pull("greatschools_ingest", "attachment_to_s3", "stage_location")
+    dag_id = kwargs.get("dag_id", "test_dag")
+    task_id = kwargs.get("task_id", "test_task")
+    s3_folder = pod_xcom_pull(dag_id, task_id, "stage_location")
     logger.info(f"Got stage loaction: {s3_folder}")
 
-    # set up S3
-    s3hook = connect_to_s3()
-    AWS_S3_BUCKET_NAME = Variable.get("AWS_S3_NAME")
-    mybucket = s3hook.get_bucket(AWS_S3_BUCKET_NAME)
+    GREATSCHOOLS_USERNAME = Variable.get("GREATSCHOOLS_USERNAME")
+    GREATSCHOOLS_PASSWORD = Variable.get("GREATSCHOOLS_PASSWORD")
 
     # Download files from greatschools to memory
     file_list = ["local-greatschools-feed-flat.zip",
@@ -166,8 +154,7 @@ def staging_to_s3(logger, **kwargs):
     for filename in file_list:
         logger.info(f"Downloading file - {filename}...")
         url = f"http://www.greatschools.org/feeds/flat_files/{filename}"
-        r = requests.get(url, timeout=5,
-                         auth=(Variable.get("GREATSCHOOLS_USERNAME"), Variable.get("GREATSCHOOLS_PASSWORD")))
+        r = requests.get(url, timeout=5, auth=(GREATSCHOOLS_USERNAME, GREATSCHOOLS_PASSWORD))
         data = io.BytesIO(r.content)
 
         logger.info(f"Uploading file - {filename}...")
@@ -220,23 +207,20 @@ def copy_to_snowflake(logger, **kwargs):
     ----------------------
     None
     """
-    # get airflow env
-    AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
+    dag_id = kwargs.get("dag_id", "test_dag")
+    task_id = kwargs.get("task_id", "test_task")
 
     # Initialize variables
-    s3_folder = pod_xcom_pull("greatschools_ingest", "attachment_to_s3", "stage_location")
+    s3_folder = pod_xcom_pull(dag_id, task_id, "stage_location")
     logger.info(f"Got stage loaction: {s3_folder}")
     s3_subfolder = s3_folder.replace("RawData/GreatSchools/", "")
 
-    # Snowflake setup.
-    DATABASE = "SCHOOLSCORES_DB"
-    SCHEMA = "RAW_GREATSCHOOLS" if AIRFLOW_ENV == "PROD" else AIRFLOW_ENV + "_" + "RAW_GREATSCHOOLS"
-    con = connect_to_snowflake(database=DATABASE, schema=SCHEMA)
+    # Snowflake setup
     cur = con.cursor()
 
     logger.info("Creating table GsDirectory and copying data...")
     cur.execute(
-        (f"CREATE OR REPLACE TABLE {DATABASE}.{SCHEMA}.GsDirectory "
+        (f"CREATE OR REPLACE TABLE GsDirectory "
          "(entity VARCHAR(16), "
          "gsid VARCHAR(16), "
          "universalid VARCHAR(16), "
@@ -270,14 +254,14 @@ def copy_to_snowflake(logger, **kwargs):
     )
 
     cur.execute(
-        (f"COPY INTO {DATABASE}.{SCHEMA}.GsDirectory "
+        (f"COPY INTO GsDirectory "
          f"FROM @GREATSCHOOLS/{s3_subfolder}/local_greatschools_feed_flat.csv "
          "FILE_FORMAT = GREATSCHOOLS ON_ERROR = 'ABORT_STATEMENT';")
     )
 
     logger.info("Creating table GsRatings and copying data...")
     cur.execute(
-        (f"CREATE OR REPLACE TABLE {DATABASE}.{SCHEMA}.GsRatings "
+        (f"CREATE OR REPLACE TABLE GsRatings "
          "(testratingid VARCHAR(10), "
          "universalid VARCHAR(10), "
          "rating NUMBER(2), "
@@ -285,14 +269,14 @@ def copy_to_snowflake(logger, **kwargs):
     )
 
     cur.execute(
-        (f"COPY INTO {DATABASE}.{SCHEMA}.GsRatings "
+        (f"COPY INTO GsRatings "
          f"FROM @GREATSCHOOLS/{s3_subfolder}/local_gs_official_overall_rating_result_feed_flat.csv "
          "FILE_FORMAT = GREATSCHOOLS ON_ERROR = 'ABORT_STATEMENT';")
     )
 
     logger.info("Creating table GsCityRatings and copying data...")
     cur.execute(
-        (f"CREATE OR REPLACE TABLE {DATABASE}.{SCHEMA}.GsCityRatings "
+        (f"CREATE OR REPLACE TABLE GsCityRatings "
          "(id VARCHAR(10), "
          "name VARCHAR(128), "
          "state VARCHAR(2), "
@@ -304,20 +288,20 @@ def copy_to_snowflake(logger, **kwargs):
     )
 
     cur.execute(
-        (f"COPY INTO {DATABASE}.{SCHEMA}.GsCityRatings "
+        (f"COPY INTO GsCityRatings "
          f"FROM @GREATSCHOOLS/{s3_subfolder}/local_greatschools_city_feed_flat.csv "
          "FILE_FORMAT = GREATSCHOOLS ON_ERROR = 'ABORT_STATEMENT';")
     )
     logger.info("Creating table GsDictionary and copying data...")
     cur.execute(
-        (f"CREATE OR REPLACE TABLE {DATABASE}.{SCHEMA}.GsDictionary "
+        (f"CREATE OR REPLACE TABLE GsDictionary "
          "(id VARCHAR(10), "
          "year NUMBER(4), "
          "description VARCHAR(1024));")
     )
 
     cur.execute(
-        (f"COPY INTO {DATABASE}.{SCHEMA}.GsDictionary "
+        (f"COPY INTO GsDictionary "
          f"FROM @GREATSCHOOLS/{s3_subfolder}/local_gs_official_overall_rating_feed_flat.csv "
          "FILE_FORMAT = GREATSCHOOLS ON_ERROR = 'ABORT_STATEMENT';")
     )
@@ -325,18 +309,18 @@ def copy_to_snowflake(logger, **kwargs):
     logger.info("Granting permission on new tables...")
     for TABLE in ["GsDirectory", "GsRatings", "GsCityRatings", "GsDictionary"]:
         cur.execute(
-            f"GRANT OWNERSHIP ON {DATABASE}.{SCHEMA}.{TABLE} TO ETL_ROLE;"
+            f"GRANT OWNERSHIP ON {TABLE} TO ETL_ROLE;"
         )
         for ROLE in ["DATAENGINEERING_ROLE", "DATASCIENCE_ROLE", "ANALYST_ROLE"]:
             cur.execute(
-                f"GRANT SELECT ON {DATABASE}.{SCHEMA}.{TABLE} TO {ROLE};"
+                f"GRANT SELECT ON {TABLE} TO {ROLE};"
             )
 
     # update DOWNLOAD_HISTORY
     logger.info("Updating DOWNLOAD_HISTORY table...")
     max_date = datetime.strptime(s3_subfolder[-8:], "%Y%m%d").strftime("%Y-%m-%d")
     cur.execute(
-        f"UPDATE {DATABASE}.{SCHEMA}.DOWNLOAD_HISTORY "
+        f"UPDATE DOWNLOAD_HISTORY "
         "SET UPDATED = TRUE "
         f"WHERE TO_DATE(EMAIL_DATETIME) <= '{max_date}';"
     )
@@ -359,7 +343,10 @@ def dbt_test(logger, **kwargs):
 
 
 if __name__ == "__main__":
-    # attachment_to_s3()
-    # staging_to_s3()
-    # copy_to_snowflake()
-    dbt_test(**{"model_name":"DBT_TEST"})
+    attachment_to_s3()
+    s3_folder = pod_xcom_pull("test_dag", "test_task", "stage_location")
+    print(f"folder: {s3_folder}.")
+    if s3_folder:
+        staging_to_s3()
+        copy_to_snowflake()
+    # dbt_test(**{"model_name":"DBT_TEST"})
