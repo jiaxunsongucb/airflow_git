@@ -140,7 +140,7 @@ def pod_xcom_pull(dag_id, task_id, key):
     if result:
         return result
     else:
-        raise Exception(f"Couldn't find XCom for DAG {dag_id}, task {task_id}, key {key}!")
+        raise Exception(f"Could not find XCom for DAG {dag_id}, task {task_id}, key {key}!")
 
 
 def create_logger(tz="UTC"):
