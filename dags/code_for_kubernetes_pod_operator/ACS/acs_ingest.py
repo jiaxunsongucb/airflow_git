@@ -1,6 +1,7 @@
 from airflow.macros.roofstock_plugin import run_with_logging, connect_to_s3, get_s3_bucket_name, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, run_dbt
 from airflow.models import Variable
 from datetime import datetime
+import time
 from ftplib import FTP
 import pandas as pd
 import re
@@ -11,7 +12,7 @@ import io
 ###########################################################
 # Global helper functions
 ###########################################################
-def _connect_ftp(host, attempt=3):
+def _connect_ftp(host, attempt=5):
     i = 0
     for _ in range(attempt):
         try:
@@ -21,6 +22,7 @@ def _connect_ftp(host, attempt=3):
         except Exception as e:
             print("FTP connection failed {} time(s)!".format(i + 1))
             print(e)
+            time.sleep(10)
             i += 1
 
     if i == attempt:
