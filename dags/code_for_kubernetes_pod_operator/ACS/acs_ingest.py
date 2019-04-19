@@ -535,15 +535,9 @@ def update_geometa(logger, **kwargs):
     """
     dbt_dir = kwargs.get("dbt_dir", "/root/airflow/code/dags/code_for_kubernetes_pod_operator/ACS/dbt")
     dbt_profiles_dir = kwargs.get("dbt_profiles_dir", "/root/.dbt")
-    AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
-    dbt_target = "prod" if AIRFLOW_ENV == "PROD" else "dev"
     var_dic = {"current_year": datetime.today().year,
-               "raw_data_schema": "RAW_ACS" if AIRFLOW_ENV == "PROD" else "TEST_RAW_ACS"}
-    dbt_command = f"""
-                    cd {dbt_dir}
-                    dbt run --models GEOMETA --vars "{var_dic}" --profiles-dir {dbt_profiles_dir} --target {dbt_target}
-                   """
-    run_dbt(dbt_command)
+               "raw_data_schema": "RAW_ACS" if Variable.get("AIRFLOW_ENV") == "PROD" else "TEST_RAW_ACS"}
+    run_dbt(dbt_dir=dbt_dir, dbt_profiles_dir=dbt_profiles_dir, model_name="GEOMETA", var_dic=var_dic)
 
 @run_with_logging()
 def upload_variable_list_to_S3(logger, **kwargs):
@@ -664,7 +658,6 @@ def pull_variables_from_raw_tables(logger, **kwargs):
     dbt_dir = kwargs.get("dbt_dir", "/root/airflow/code/dags/code_for_kubernetes_pod_operator/ACS/dbt")
     dbt_profiles_dir = kwargs.get("dbt_profiles_dir", "/root/.dbt")
     AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
-    dbt_target = "prod" if AIRFLOW_ENV == "PROD" else "dev"
 
     def _fix_divided_by_0(formula):
         p = formula.find("/")
@@ -702,12 +695,7 @@ def pull_variables_from_raw_tables(logger, **kwargs):
                    "end_year": 2017,
                    "raw_data_schema": "RAW_ACS" if AIRFLOW_ENV == "PROD" else "TEST_RAW_ACS"}
 
-        dbt_command = f"""
-                        cd {dbt_dir}
-                        dbt run --models ACS_BY_GROUP_TEMP --vars "{var_dic}" --profiles-dir {dbt_profiles_dir} --target {dbt_target}
-                       """
-
-        run_dbt(dbt_command)
+        run_dbt(dbt_dir=dbt_dir, dbt_profiles_dir=dbt_profiles_dir, model_name="ACS_BY_GROUP_TEMP", var_dic=var_dic)
 
         for col in roofstock_name_list:
             logger.info(f"Copying column {col} from ACS_BY_GROUP_TEMP to FACT...")

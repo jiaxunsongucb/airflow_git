@@ -47,7 +47,15 @@ def run_command(command):
     return return_code, last_output
 
 
-def run_dbt(dbt_command):
+def run_dbt(dbt_command="", dbt_dir="", dbt_profiles_dir="/root/.dbt", model_name="", var_dic=""):
+    if not dbt_command:
+        print("Did not find dbt_command from user, preparing the command based on the other input.")
+        AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
+        dbt_target = "prod" if AIRFLOW_ENV == "PROD" else "dev"
+        dbt_command = f"""
+                        cd {dbt_dir}
+                        dbt run --models {model_name} --vars "{var_dic}" --profiles-dir {dbt_profiles_dir} --target {dbt_target}
+                       """
     print("Running dbt using command:")
     print(dbt_command)
     return_code, last_output = run_command(dbt_command)
