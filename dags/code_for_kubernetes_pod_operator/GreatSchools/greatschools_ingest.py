@@ -1,4 +1,4 @@
-from airflow.macros.roofstock_plugin import run_with_logging, connect_to_s3_bucket, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, run_dbt
+from airflow.macros.roofstock_plugin import run_with_logging, connect_to_s3, get_s3_bucket_name, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, run_dbt
 from airflow.models import Variable
 import pandas as pd
 import requests
@@ -16,7 +16,9 @@ pd.set_option('display.max_columns', 100)
 # pd.set_option('display.width', 5)
 
 # setup S3
-mybucket = connect_to_s3_bucket()
+s3hook = connect_to_s3()
+AWS_S3_BUCKET_NAME = get_s3_bucket_name()
+mybucket = s3hook.get_bucket(AWS_S3_BUCKET_NAME)
 
 # setup Snowflake
 con = connect_to_snowflake(database="SCHOOLSCORES_DB", schema="RAW_GREATSCHOOLS")

@@ -6,3 +6,4 @@ apache-airflow==1.10.3
 psycopg2-binary
 snowflake-sqlalchemy
 dbt
+xlrd

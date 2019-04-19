@@ -19,17 +19,23 @@ dag = DAG('acs_ingest', default_args=default_args, schedule_interval=timedelta(m
 
 code_folder = "ACS"
 
-dbt_config_volume, dbt_config_volume_mount = volume_factory(name="dbt-config",
-                                                            claimName="dbt-acs-ingest",
-                                                            mount_path="/root/airflow/.dbt",
-                                                            sub_path=".dbt",
+dbt_config_volume, dbt_config_volume_mount = volume_factory(name="dbt-profiles",
+                                                            claimName="dbt-profiles",
+                                                            mount_path="/root/.dbt/profiles.yml",
+                                                            sub_path="profiles_acs.yml",
                                                             read_only=True,
                                                             persistentVolumeClaim=False)
 
 # --------------------------------------------------------
 # Transfer data from FTP to S3
 
-docs_FTP_to_S3 = RoofstockKubernetesPodOperator(dag=dag, task_id="docs_FTP_to_S3", code_folder=code_folder)
+docs_FTP_to_S3 = RoofstockKubernetesPodOperator(dag=dag,
+                                                task_id="docs_FTP_to_S3",
+                                                code_folder=code_folder,
+                                                script_name="acs_ingest",
+                                                python_callable="docs_FTP_to_S3",
+                                                python_kwargs={"year": year})
+
 template_FTP_to_S3 = RoofstockKubernetesPodOperator(dag=dag, task_id="template_FTP_to_S3", code_folder=code_folder)
 
 
@@ -55,8 +61,7 @@ def subdag_transfer_sequence(parent_dag_name, child_dag_name, default_args):
             task_id=f"{child_dag_name}-State-{state}",
             dag=dag_subdag,
             wait_for_downstream=True,
-            provide_context=True,
-            env_vars={"year": year, "state": state}
+            python_kwargs={"year": year, "state": state}
         )
 
     return dag_subdag
@@ -71,6 +76,7 @@ sequence_FTP_to_S3 = SubDagOperator(dag=dag,
 
 copy_geo_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_geo_S3_to_Snowflake",
                                                           code_folder=code_folder)
+
 copy_lookup_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_lookup_S3_to_Snowflake",
                                                              code_folder=code_folder)
 

@@ -1,17 +1,23 @@
 # -*- coding: utf-8 -*-
-
 # These are commonly used utilities by Airflow DAGs
 
 ###########################################################
 # Packages
 ###########################################################
+from airflow.plugins_manager import AirflowPlugin
+from airflow import configuration as conf
 from airflow.models import Variable, XCom
+from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
+from airflow.hooks.S3_hook import S3Hook
+from airflow.utils import timezone
+from airflow.contrib.kubernetes.pod import Resources
+from airflow.contrib.kubernetes.volume import Volume
+from airflow.contrib.kubernetes.volume_mount import VolumeMount
+import snowflake.connector
 from datetime import datetime
 from functools import wraps
-import io
 import logging
 from pathlib import Path
-import pandas as pd
 import time
 import traceback
 import os
@@ -19,29 +25,12 @@ import requests
 import sys
 import json
 import subprocess
-
-# This is the class you derive to create a plugin
-from airflow.plugins_manager import AirflowPlugin
-
-# Importing base classes that we need to derive
-from airflow.operators.bash_operator import BashOperator
-from airflow.contrib.operators.kubernetes_pod_operator import KubernetesPodOperator
-
 import pytz
-
-from airflow import configuration as conf
-from airflow.hooks.S3_hook import S3Hook
-from airflow.utils import timezone
-from airflow.contrib.kubernetes.pod import Resources
-from airflow.contrib.kubernetes.volume import Volume
-from airflow.contrib.kubernetes.volume_mount import VolumeMount
-import snowflake.connector
 
 
 ###########################################################
 # Global helper functions
 ###########################################################
-
 def run_command(command):
     process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     last_output = ""
@@ -62,37 +51,6 @@ def run_dbt(dbt_command):
     return_code, last_output = run_command(dbt_command)
     if return_code or "WARNING" in last_output or "PASS=0" in last_output:
         raise Exception(f"dbt failed!")
-
-
-def pd_read_s3(bucket, key, s3_client, *args, **kwargs):
-    """
-    Function
-    ----------------------
-    Read csv/excel file living on S3.
-
-    Parameter
-    ----------------------
-    bucket : string
-        S3 bucket name
-
-    key : string
-        S3 file path, which is called "key" on S3
-
-    s3_client : boto3.client("s3")
-
-    Return
-    ----------------------
-    pandas DataFrame object
-
-    """
-    obj = s3_client.get_object(Bucket=bucket, Key=key)
-    if key[-4:] == ".csv":
-        return pd.read_csv(io.BytesIO(obj["Body"].read()), encoding="ISO-8859-1", *args, **kwargs)
-    else:
-        try:
-            return pd.read_excel(io.BytesIO(obj["Body"].read()), encoding="ISO-8859-1", *args, **kwargs)
-        except:
-            raise Exception("The file is not a csv or an excel file!")
 
 
 def connect_to_snowflake(database, schema):
@@ -118,12 +76,10 @@ def connect_to_s3():
     return s3hook
 
 
-def connect_to_s3_bucket():
-    s3hook = connect_to_s3()
+def get_s3_bucket_name():
     AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
     AWS_S3_BUCKET_NAME = Variable.get("AWS_S3_BUCKET_NAME") if AIRFLOW_ENV == "PROD" else Variable.get("AWS_S3_BUCKET_NAME_DEV")
-    mybucket = s3hook.get_bucket(AWS_S3_BUCKET_NAME)
-    return mybucket
+    return AWS_S3_BUCKET_NAME
 
 
 def pod_xcom_push(xcom: dict):
@@ -141,10 +97,7 @@ def pod_xcom_pull(dag_id, task_id, key):
     execution_date = timezone.utcnow()
     xcom_obj = XCom()
     result = xcom_obj.get_one(execution_date, key, task_id, dag_id, include_prior_dates=True)
-    if result:
-        return result
-    else:
-        raise Exception(f"Could not find XCom for DAG {dag_id}, task {task_id}, key {key}!")
+    return result
 
 
 def create_logger(tz="UTC"):
@@ -246,52 +199,6 @@ class LoggerWriter(object):
             self._buffer = str()
 
 
-def run_with_logging(tz="US/Pacific"):
-    """
-    Function
-    ----------------------
-    Logging wrapper
-
-    Parameter
-    ----------------------
-    None
-
-    Return
-    ----------------------
-    Decorated function
-    """
-
-    def decorate(func):
-
-        @wraps(func)
-        def wrapper(**kwargs):
-            # mute snowflake.connector logging
-            # workaround for this issue:
-            # https://support.snowflake.net/s/question/0D50Z00008gYUIGSA4/python-snowflakeconnectornetwork-error-when-logging-enabled
-            logging.getLogger("snowflake.connector").propagate = False
-
-            logger = create_logger(tz)
-
-            # save all stdout to the logger
-            sys.stdout = LoggerWriter(logger, logging.INFO)
-            try:
-                result = func(logger, **kwargs)
-                logger.info("Process finished with exit code 0")
-                logger.removeHandler(logger.handlers[0])
-                return result
-
-            except Exception as error:
-                logger.error(error)
-                logger.error("\n" + "".join(traceback.format_exception(*sys.exc_info())))
-                logger.error("Process finished with exit code 1")
-                logger.removeHandler(logger.handlers[0])
-                sys.exit(1)
-
-        return wrapper
-
-    return decorate
-
-
 def send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_log=False):
     """
     Function
@@ -364,7 +271,7 @@ def send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_l
         payload["attachments"].append({"title": "System log", "text": log, "color": color})
 
     # Post the message to the Slack webhook
-    r = requests.post(url, json=payload)
+    requests.post(url, json=payload)
 
 
 def send_message(send_log=True, success_ignore=True, test=False):
@@ -436,6 +343,52 @@ def send_message(send_log=True, success_ignore=True, test=False):
     return decorate
 
 
+def run_with_logging(tz="US/Pacific"):
+    """
+    Function
+    ----------------------
+    Logging wrapper
+
+    Parameter
+    ----------------------
+    None
+
+    Return
+    ----------------------
+    Decorated function
+    """
+
+    def decorate(func):
+
+        @wraps(func)
+        def wrapper(**kwargs):
+            # mute snowflake.connector logging
+            # workaround for this issue:
+            # https://support.snowflake.net/s/question/0D50Z00008gYUIGSA4/python-snowflakeconnectornetwork-error-when-logging-enabled
+            logging.getLogger("snowflake.connector").propagate = False
+
+            logger = create_logger(tz)
+
+            # save all stdout to the logger
+            sys.stdout = LoggerWriter(logger, logging.INFO)
+            try:
+                result = func(logger, **kwargs)
+                logger.info("Process finished with exit code 0")
+                logger.removeHandler(logger.handlers[0])
+                return result
+
+            except Exception as error:
+                logger.error(error)
+                logger.error("\n" + "".join(traceback.format_exception(*sys.exc_info())))
+                logger.error("Process finished with exit code 1")
+                logger.removeHandler(logger.handlers[0])
+                sys.exit(1)
+
+        return wrapper
+
+    return decorate
+
+
 def default_affinity():
     affinity = {
         'nodeAffinity': {
@@ -492,75 +445,6 @@ def volume_factory(name, claimName, mount_path, sub_path, read_only=True, persis
 ###########################################################
 # Airflow Plugin Operators
 ###########################################################
-
-class BashMessageOperator(BashOperator):
-    """
-    BashMessageOperator object that inherits BashOperator.
-    """
-
-    def __init__(self, success_ignore=True, send_log=False, test=False, *args, **kwargs):
-        super(BashMessageOperator, self).__init__(*args, **kwargs)
-        self.send_log = send_log
-        self.success_ignore = success_ignore
-        self.test = test
-
-    def execute(self, context):
-        """
-        Call the execute in the super class,
-        parse the log file and then send slack message.
-        """
-        from pathlib import Path
-        import re
-        from airflow.exceptions import AirflowException
-
-        try:
-            result = super(BashMessageOperator, self).execute(context)
-        except:
-            pass
-
-        returncode = self.sp.returncode
-        dag_id = self.dag_id
-        task_id = self.task_id
-        dag_owner = self.owner
-
-        p = Path("/home/roofstock/airflow/logs", dag_id, task_id)
-        log = sorted([f for f in sorted([d for d in p.iterdir()])[-1].iterdir()])[-1].open()
-
-        msg_body = ""
-        start = False
-        end = False
-        for line in log:
-            if re.findall(r'{bash_operator.py:\d*} INFO - Command exited', line):
-                end = True
-            if start and not end and re.findall(r'.*{bash_operator.py:\d*}.*- ', line):
-                line = re.findall(r'.*{bash_operator.py:\d*}.*- (.*)', line)[0]
-                line = re.sub(r'(:?\x1b\[\d*m|\x1b\[0m)', '', line)
-                msg_body += line + "\n"
-            if re.findall(r'{bash_operator.py:\d*} INFO - Output:', line):
-                start = True
-
-        if returncode:
-            task_status = "FAILED"
-            if not self.test:
-                send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_log=self.send_log)
-            raise AirflowException("Bash command failed!")
-        elif "WARNING" in msg_body.upper():
-            task_status = "FAILED"
-            if not self.test:
-                send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_log=self.send_log)
-            raise AirflowException("Found WARNING!")
-        elif "ERROR" in msg_body.upper() and "ERROR=0" not in msg_body:
-            task_status = "FAILED"
-            if not self.test:
-                send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_log=self.send_log)
-            raise AirflowException("Found ERROR!")
-        else:
-            task_status = "SUCCEEDED"
-            if not self.success_ignore:
-                send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_log=False)
-            return result
-
-
 class RoofstockKubernetesPodOperator(KubernetesPodOperator):
     """
     Airflow Plugin KubernetesPodOperator Class that inherits default KubernetesPodOperator.
@@ -700,14 +584,14 @@ class AirflowPlugin(AirflowPlugin):
     # The name of your plugin (str)
     name = "roofstock_plugin"
     # A list of class(es) derived from BaseOperator
-    operators = [BashMessageOperator, RoofstockKubernetesPodOperator]
+    operators = [RoofstockKubernetesPodOperator]
     # A list of class(es) derived from BaseHook
     hooks = []
     # A list of class(es) derived from BaseExecutor
     executors = []
     # A list of references to inject into the macros namespace
-    macros = [send_slack_message, create_logger, pd_read_s3, send_message, run_with_logging, run_command, run_dbt,
-              connect_to_s3, connect_to_s3_bucket, connect_to_snowflake,
+    macros = [run_with_logging, run_command, run_dbt,
+              connect_to_s3, get_s3_bucket_name, connect_to_snowflake,
               pod_xcom_push, pod_xcom_pull, default_affinity, volume_factory]
     # A list of objects created from a class derived
     # from flask_admin.BaseView
