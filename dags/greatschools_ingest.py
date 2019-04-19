@@ -41,20 +41,5 @@ skipped = DummyOperator(
     task_id="skipped",
     dag=dag)
 
-dbt_config_volume, dbt_config_volume_mount = volume_factory(name="dbt-profiles",
-                                                            claimName="dbt-profiles",
-                                                            mount_path="/root/.dbt/profiles.yml",
-                                                            sub_path="profiles_test.yml",
-                                                            read_only=True,
-                                                            persistentVolumeClaim=False)
-
-dbt_test_pass = RoofstockKubernetesPodOperator(dag=dag,
-                                               task_id="dbt_test_pass",
-                                               python_callable="dbt_test",
-                                               code_folder=code_folder,
-                                               volumes=[dbt_config_volume],
-                                               volume_mounts=[dbt_config_volume_mount],
-                                               python_kwargs={"model_name": "DBT_TEST"})
-
-dbt_test_pass >> attachment_to_s3 >> branching >> staging_to_s3 >> copy_to_snowflake
+attachment_to_s3 >> branching >> staging_to_s3 >> copy_to_snowflake
 branching >> skipped

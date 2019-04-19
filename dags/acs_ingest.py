@@ -36,7 +36,12 @@ docs_FTP_to_S3 = RoofstockKubernetesPodOperator(dag=dag,
                                                 python_callable="docs_FTP_to_S3",
                                                 python_kwargs={"year": year})
 
-template_FTP_to_S3 = RoofstockKubernetesPodOperator(dag=dag, task_id="template_FTP_to_S3", code_folder=code_folder)
+template_FTP_to_S3 = RoofstockKubernetesPodOperator(dag=dag,
+                                                    task_id="template_FTP_to_S3",
+                                                    code_folder=code_folder,
+                                                    script_name="acs_ingest",
+                                                    python_callable="template_FTP_to_S3",
+                                                    python_kwargs={"year": year})
 
 
 def subdag_transfer_sequence(parent_dag_name, child_dag_name, default_args):
@@ -53,16 +58,13 @@ def subdag_transfer_sequence(parent_dag_name, child_dag_name, default_args):
                   'RhodeIsland', 'SouthCarolina', 'SouthDakota', 'Tennessee', 'Texas', 'UnitedStates', 'Utah',
                   'Vermont', 'Virginia', 'Washington', 'WestVirginia', 'Wisconsin', 'Wyoming']
 
-    for state in state_list:
-        RoofstockKubernetesPodOperator(
-            code_folder=code_folder,
-            script_name="acs_ingest",
-            python_callable="sequence_FTP_to_S3",
-            task_id=f"{child_dag_name}-State-{state}",
-            dag=dag_subdag,
-            wait_for_downstream=True,
-            python_kwargs={"year": year, "state": state}
-        )
+    for state in ['California']:
+        RoofstockKubernetesPodOperator(dag=dag_subdag,
+                                       task_id=f"{child_dag_name}-State-{state}",
+                                       code_folder=code_folder,
+                                       script_name="acs_ingest",
+                                       python_callable="sequence_FTP_to_S3",
+                                       python_kwargs={"year": year, "state": state})
 
     return dag_subdag
 
@@ -74,11 +76,19 @@ sequence_FTP_to_S3 = SubDagOperator(dag=dag,
 # --------------------------------------------------------
 # Populate database
 
-copy_geo_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_geo_S3_to_Snowflake",
-                                                          code_folder=code_folder)
+copy_geo_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag,
+                                                          task_id="copy_geo_S3_to_Snowflake",
+                                                          code_folder=code_folder,
+                                                          script_name="acs_ingest",
+                                                          python_callable="copy_geo_S3_to_Snowflake",
+                                                          python_kwargs={"year": year})
 
-copy_lookup_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_lookup_S3_to_Snowflake",
-                                                             code_folder=code_folder)
+copy_lookup_S3_to_Snowflake = RoofstockKubernetesPodOperator(dag=dag,
+                                                             task_id="copy_lookup_S3_to_Snowflake",
+                                                             code_folder=code_folder,
+                                                             script_name="acs_ingest",
+                                                             python_callable="copy_lookup_S3_to_Snowflake",
+                                                             python_kwargs={"year": year})
 
 
 def subdag_copy_sequence(parent_dag_name, child_dag_name, default_args):
@@ -89,14 +99,12 @@ def subdag_copy_sequence(parent_dag_name, child_dag_name, default_args):
 
     for sequence in range(1, 150):
         RoofstockKubernetesPodOperator(
+            dag=dag_subdag,
+            task_id=f"{child_dag_name}-Seq{sequence}",
             code_folder=code_folder,
             script_name="acs_ingest",
             python_callable="copy_sequence_S3_to_Snowflake",
-            task_id=f"{child_dag_name}-Seq{sequence}",
-            dag=dag_subdag,
-            wait_for_downstream=True,
-            provide_context=True,
-            env_vars={"year": year, "sequence": sequence}
+            python_kwargs={"year": year, "sequence": sequence}
         )
 
     return dag_subdag
@@ -110,7 +118,11 @@ copy_sequence_S3_to_Snowflake = SubDagOperator(dag=dag,
 
 # --------------------------------------------------------
 # Update VARIABLE_LISTS and FACT tables
-update_geometa = RoofstockKubernetesPodOperator(dag=dag, task_id="update_geometa", code_folder=code_folder)
+update_geometa = RoofstockKubernetesPodOperator(dag=dag,
+                                                task_id="update_geometa",
+                                                code_folder=code_folder,
+                                                script_name="acs_ingest",
+                                                python_callable="update_geometa")
 
 
 def subdag_update_fact_on_Snowflake(parent_dag_name, child_dag_name, default_args):
@@ -119,45 +131,41 @@ def subdag_update_fact_on_Snowflake(parent_dag_name, child_dag_name, default_arg
         default_args=default_args
     )
 
-    variable_list_to_S3 = RoofstockKubernetesPodOperator(
-        code_folder=code_folder,
-        script_name="acs_ingest",
+    upload_variable_list_to_S3 = RoofstockKubernetesPodOperator(
+        dag=dag_subdag,
         task_id="upload_variable_list_to_S3",
-        dag=dag_subdag,
-        wait_for_downstream=True,
-        provide_context=True
-    )
-
-    variable_list_to_Snowflake = RoofstockKubernetesPodOperator(
         code_folder=code_folder,
         script_name="acs_ingest",
+        python_callable="upload_variable_list_to_S3"
+    )
+
+    upload_variable_list_to_Snowflake = RoofstockKubernetesPodOperator(
+        dag=dag_subdag,
         task_id="upload_variable_list_to_Snowflake",
-        dag=dag_subdag,
-        wait_for_downstream=True,
-        provide_context=True,
-        env_vars={"year": year}
-    )
-
-    create_fact_table_on_Snowflake = RoofstockKubernetesPodOperator(
         code_folder=code_folder,
         script_name="acs_ingest",
+        python_callable="upload_variable_list_to_Snowflake",
+        python_kwargs={"year": year}
+    )
+
+    create_fact_table = RoofstockKubernetesPodOperator(
+        dag=dag_subdag,
         task_id="create_fact_table",
-        dag=dag_subdag,
-        wait_for_downstream=True,
-        provide_context=True
-    )
-
-    variables_from_raw_tables = RoofstockKubernetesPodOperator(
         code_folder=code_folder,
         script_name="acs_ingest",
-        task_id="pull_variables_from_raw_tables",
-        dag=dag_subdag,
-        wait_for_downstream=True,
-        provide_context=True,
-        env_vars={"year": year}
+        python_callable="create_fact_table"
     )
 
-    variable_list_to_S3 >> variable_list_to_Snowflake >> create_fact_table_on_Snowflake >> variables_from_raw_tables
+    pull_variables_from_raw_tables = RoofstockKubernetesPodOperator(
+        dag=dag_subdag,
+        task_id="pull_variables_from_raw_tables",
+        code_folder=code_folder,
+        script_name="acs_ingest",
+        python_callable="pull_variables_from_raw_tables",
+        python_kwargs={"year": year}
+    )
+
+    upload_variable_list_to_S3 >> upload_variable_list_to_Snowflake >> create_fact_table >> pull_variables_from_raw_tables
     return dag_subdag
 
 

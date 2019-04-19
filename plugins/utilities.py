@@ -48,6 +48,8 @@ def run_command(command):
 
 
 def run_dbt(dbt_command):
+    print("Running dbt using command:")
+    print(dbt_command)
     return_code, last_output = run_command(dbt_command)
     if return_code or "WARNING" in last_output or "PASS=0" in last_output:
         raise Exception(f"dbt failed!")
@@ -55,7 +57,7 @@ def run_dbt(dbt_command):
 
 def connect_to_snowflake(database, schema):
     AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
-    schema = schema if AIRFLOW_ENV == "PROD" else AIRFLOW_ENV + "_" + schema
+    schema = schema if AIRFLOW_ENV == "PROD" else "TEST_" + schema
     conn_config = {
         "user": Variable.get("SNOWFLAKE_USER"),
         "password": Variable.get("SNOWFLAKE_PASSWORD"),
@@ -452,8 +454,8 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
 
     def __init__(self,
                  code_folder,
-                 script_name=str(),
-                 python_callable=str(),
+                 script_name,
+                 python_callable,
                  python_kwargs={},
                  image=str(),
                  namespace=str(),
@@ -485,10 +487,10 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
                  security_context={},
                  *args,
                  **kwargs):
-        # required from user: dag, task_id, code_folder, python_callable
+        # required from user: dag, task_id, code_folder, script_name, python_callable
         super(KubernetesPodOperator, self).__init__(*args, **kwargs)
-        self.script_name = script_name or self.dag_id
-        self.python_callable = python_callable or self.task_id
+        self.script_name = script_name
+        self.python_callable = python_callable
         self.python_kwargs = {**python_kwargs, **self.default_env_vars}
         self.image = image or "jiaxun/datatools:general_purpose"
         self.namespace = namespace or conf.get("kubernetes", "namespace")

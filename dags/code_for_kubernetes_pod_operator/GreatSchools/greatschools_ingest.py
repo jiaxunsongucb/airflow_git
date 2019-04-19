@@ -327,20 +327,6 @@ def copy_to_snowflake(logger, **kwargs):
     con.close()
 
 
-@run_with_logging()
-def dbt_test(logger, **kwargs):
-    model_name = kwargs["model_name"]
-    command = f"""
-            cd /root/airflow/code/dags/code_for_kubernetes_pod_operator/GreatSchools/dbt
-            dbt run --models {model_name} --profiles-dir /root/.dbt
-          """
-    # command = f"""
-    #         cd /Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/dags/code_for_kubernetes_pod_operator/GreatSchools/dbt
-    #         dbt run --models {model_name} --profiles-dir /Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/.dbt
-    #       """
-    run_dbt(command)
-
-
 if __name__ == "__main__":
     attachment_to_s3()
     s3_folder = pod_xcom_pull("test_dag", "test_task", "stage_location")
@@ -348,4 +334,3 @@ if __name__ == "__main__":
     if s3_folder:
         staging_to_s3()
         copy_to_snowflake()
-    # dbt_test(**{"model_name":"DBT_TEST"})

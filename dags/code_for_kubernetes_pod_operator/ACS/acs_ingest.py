@@ -1,4 +1,6 @@
 from airflow.macros.roofstock_plugin import run_with_logging, connect_to_s3, get_s3_bucket_name, connect_to_snowflake, pod_xcom_push, pod_xcom_pull, run_dbt
+from airflow.models import Variable
+from datetime import datetime
 from ftplib import FTP
 import pandas as pd
 import re
@@ -9,24 +11,6 @@ import io
 ###########################################################
 # Global helper functions
 ###########################################################
-def _ftp_traverse(ftp, callable):
-    entry_list = ftp.nlst()
-
-    for entry in entry_list:
-        try:  # the entry is a directory
-            ftp.cwd(entry)
-            print("Traversing FTP directory - {}...".format(ftp.pwd()))
-
-            # recursively call the function itself
-            _ftp_traverse(ftp, callable)
-
-            # backtrack
-            ftp.cwd("..")
-
-        except:  # the entry is a file, call callable function
-            callable(ftp, entry)
-
-
 def _connect_ftp(host, attempt=3):
     i = 0
     for _ in range(attempt):
@@ -41,6 +25,24 @@ def _connect_ftp(host, attempt=3):
 
     if i == attempt:
         raise Exception("FTP connection failed!")
+
+
+def _ftp_traverse(ftp, callback):
+    entry_list = ftp.nlst()
+
+    for entry in entry_list:
+        try:  # the entry is a directory
+            ftp.cwd(entry)
+            print("Traversing FTP directory - {}...".format(ftp.pwd()))
+
+            # recursively call the function itself
+            _ftp_traverse(ftp, callback)
+
+            # backtrack
+            ftp.cwd("..")
+
+        except:  # the entry is a file, call callable function
+            callback(ftp, entry)
 
 
 def _ftp_download_file(ftp, entry):
@@ -448,7 +450,6 @@ def copy_sequence_S3_to_Snowflake(logger, **kwargs):
     # setup S3
     s3hook = connect_to_s3()
     AWS_S3_BUCKET_NAME = get_s3_bucket_name()
-    mybucket = s3hook.get_bucket(AWS_S3_BUCKET_NAME)
 
     # setup Snowflake
     con = connect_to_snowflake(database="CENSUS_DB", schema="RAW_ACS")
@@ -480,7 +481,7 @@ def copy_sequence_S3_to_Snowflake(logger, **kwargs):
 
         # copy data into tables
         prefix = f"RawData/ACS/summary_file/{year}/data/5_year_seq_by_state/"
-        path_list = s3hook.list_keys(bucket_name=AWS_S3_BUCKET_NAME, prefix=prefix)
+        path_list = s3hook.list_prefixes(bucket_name=AWS_S3_BUCKET_NAME, prefix=prefix, delimiter="/")
 
         # loop all states
         for path_root in path_list:
@@ -525,6 +526,23 @@ def copy_sequence_S3_to_Snowflake(logger, **kwargs):
 ###########################################################
 # Update VARIABLE_LIST and FACT tables on Snowflake
 ###########################################################
+@run_with_logging()
+def update_geometa(logger, **kwargs):
+    """
+    Copy the ACS_variable_list.csv file from local file system to S3.
+    """
+    dbt_dir = kwargs.get("dbt_dir", "/root/airflow/code/dags/code_for_kubernetes_pod_operator/ACS/dbt")
+    dbt_profiles_dir = kwargs.get("dbt_profiles_dir", "/root/.dbt")
+    AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
+    dbt_target = "prod" if AIRFLOW_ENV == "PROD" else "dev"
+    var_dic = {"current_year": datetime.today().year,
+               "raw_data_schema": "RAW_ACS" if AIRFLOW_ENV == "PROD" else "TEST_RAW_ACS"}
+    dbt_command = f"""
+                    cd {dbt_dir}
+                    dbt run --models GEOMETA --vars "{var_dic}" --profiles-dir {dbt_profiles_dir} --target {dbt_target}
+                   """
+    run_dbt(dbt_command)
+
 @run_with_logging()
 def upload_variable_list_to_S3(logger, **kwargs):
     """
@@ -605,13 +623,13 @@ def create_fact_table(logger, **kwargs):
     # Read table CENSUS_DB.PROD_ACS.VARIABLE_LIST from Snowflake
     logger.info("Reading table CENSUS_DB.PROD_ACS.VARIABLE_LIST from Snowflake...")
     sql = "SELECT * FROM VARIABLE_LIST;"
-    df = pd.read_sql(sql=sql, con=cur)
+    df = pd.read_sql(sql=sql, con=con)
 
     # Create table CENSUS_DB.PROD_ACS.FACT
     logger.info("Creating table CENSUS_DB.PROD_ACS.FACT...")
-    df["col_type"] = df["statistic"].apply(
+    df["col_type"] = df["STATISTIC"].apply(
         lambda x: "NUMBER(9, 6)" if x in ["rate", "percentage"] else "NUMBER(16, 2)").values.tolist()
-    df["col_type"] = df["roofstock_name"] + " " + df["col_type"]
+    df["col_type"] = df["ROOFSTOCK_NAME"] + " " + df["col_type"]
     col_type = df["col_type"].unique().tolist()
 
     cur.execute(
@@ -641,6 +659,10 @@ def pull_variables_from_raw_tables(logger, **kwargs):
     """
     # Initialize variables
     year = kwargs["year"]
+    dbt_dir = kwargs.get("dbt_dir", "/root/airflow/code/dags/code_for_kubernetes_pod_operator/ACS/dbt")
+    dbt_profiles_dir = kwargs.get("dbt_profiles_dir", "/root/.dbt")
+    AIRFLOW_ENV = Variable.get("AIRFLOW_ENV")
+    dbt_target = "prod" if AIRFLOW_ENV == "PROD" else "dev"
 
     def _fix_divided_by_0(formula):
         p = formula.find("/")
@@ -655,33 +677,35 @@ def pull_variables_from_raw_tables(logger, **kwargs):
 
     # Read table CENSUS_DB.PROD_ACS.VARIABLE_LIST from Snowflake
     sql = "SELECT * FROM VARIABLE_LIST;"
-    df = pd.read_sql(sql=sql, con=cur)
-    grouped = df.groupby("group_name")
+    df = pd.read_sql(sql=sql, con=con)
+    print(df.columns)
+    grouped = df.groupby("GROUP_NAME")
 
     for group_name, group_df in grouped:
         logger.info(f"Building temporary table ACS_BY_GROUP_TEMP for the group {group_name}...")
 
-        variables = list(set(group_df["formula"].str.findall("(?:B|C)[\w\d]*_[\w\d]*").sum()))
-        roofstock_name_list = group_df["roofstock_name"].tolist()
+        variables = list(set(group_df["FORMULA"].str.findall("(?:B|C)[\w\d]*_[\w\d]*").sum()))
+        roofstock_name_list = group_df["ROOFSTOCK_NAME"].tolist()
         roofstock_names = ", ".join(roofstock_name_list)
-        formula_list = group_df["formula"].tolist()
+        formula_list = group_df["FORMULA"].tolist()
         formula_list = [_fix_divided_by_0(f) for f in formula_list]
         select_col = ", ".join([pair[0] + " as " + pair[1] for pair in zip(formula_list, roofstock_name_list)])
-        start_year = group_df["start_year"].max()
-        end_year = min(group_df["end_year"].max(), year)
+        start_year = group_df["START_YEAR"].max()
+        end_year = min(group_df["END_YEAR"].max(), year)
 
         var_dic = {"variables": variables,
                    "select_col": select_col,
                    "roofstock_names": roofstock_names,
-                   "start_year": start_year,
-                   "end_year": end_year}
+                   "start_year": 2017,
+                   "end_year": 2017,
+                   "raw_data_schema": "RAW_ACS" if AIRFLOW_ENV == "PROD" else "TEST_RAW_ACS"}
 
-        command = f"""
-                cd /home/jsong/airflow/dags/ACS/dbt
-                dbt run --models ACS_BY_GROUP_TEMP --profiles-dir /home/jsong/.dbt --vars "{var_dic}"
-              """
+        dbt_command = f"""
+                        cd {dbt_dir}
+                        dbt run --models ACS_BY_GROUP_TEMP --vars "{var_dic}" --profiles-dir {dbt_profiles_dir} --target {dbt_target}
+                       """
 
-        run_dbt(command)
+        run_dbt(dbt_command)
 
         for col in roofstock_name_list:
             logger.info(f"Copying column {col} from ACS_BY_GROUP_TEMP to FACT...")
@@ -702,15 +726,19 @@ def pull_variables_from_raw_tables(logger, **kwargs):
 
 if __name__ == "__main__":
     year = 2017
-    # docs_FTP_to_S3(**{"year": year})
-    # template_FTP_to_S3(**{"year": year})
-    # sequence_FTP_to_S3(**{"year": year, "state": "California"})
+    docs_FTP_to_S3(**{"year": year})
+    template_FTP_to_S3(**{"year": year})
+    sequence_FTP_to_S3(**{"year": year, "state": "California"})
 
-    # copy_geo_S3_to_Snowflake(**{"year": year})
-    # copy_lookup_S3_to_Snowflake(**{"year": year})
-    # copy_sequence_S3_to_Snowflake(**{"year": year, "sequence": 1})
+    copy_geo_S3_to_Snowflake(**{"year": year})
+    copy_lookup_S3_to_Snowflake(**{"year": year})
+    copy_sequence_S3_to_Snowflake(**{"year": year, "sequence": 1})
 
-    # upload_variable_list_to_S3()
-    # upload_variable_list_to_Snowflake(**{"year": year})
-    # create_fact_table()
-    # pull_variables_from_raw_tables(**{"year": year})
+    update_geometa(**{"dbt_dir": "/Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/dags/code_for_kubernetes_pod_operator/ACS/dbt",
+                      "dbt_profiles_dir": "/Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/.dbt"})
+    upload_variable_list_to_S3()
+    upload_variable_list_to_Snowflake(**{"year": year})
+    create_fact_table()
+    pull_variables_from_raw_tables(**{"year": year,
+                                      "dbt_dir": "/Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/dags/code_for_kubernetes_pod_operator/ACS/dbt",
+                                      "dbt_profiles_dir": "/Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/.dbt"})
