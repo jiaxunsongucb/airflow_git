@@ -122,7 +122,9 @@ update_geometa = RoofstockKubernetesPodOperator(dag=dag,
                                                 task_id="update_geometa",
                                                 code_folder=code_folder,
                                                 script_name="acs_ingest",
-                                                python_callable="update_geometa")
+                                                python_callable="update_geometa",
+                                                volume_mounts=[dbt_config_volume_mount],
+                                                volumes=[dbt_config_volume])
 
 
 def subdag_update_fact_on_Snowflake(parent_dag_name, child_dag_name, default_args):
@@ -162,7 +164,9 @@ def subdag_update_fact_on_Snowflake(parent_dag_name, child_dag_name, default_arg
         code_folder=code_folder,
         script_name="acs_ingest",
         python_callable="pull_variables_from_raw_tables",
-        python_kwargs={"year": year}
+        python_kwargs={"year": year},
+        volume_mounts=[dbt_config_volume_mount],
+        volumes=[dbt_config_volume]
     )
 
     upload_variable_list_to_S3 >> upload_variable_list_to_Snowflake >> create_fact_table >> pull_variables_from_raw_tables
