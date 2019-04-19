@@ -16,9 +16,24 @@ default_args = {
 dag = DAG('greatschools_ingest', default_args=default_args, schedule_interval=timedelta(minutes=100))
 
 code_folder = "GreatSchools"
-attachment_to_s3 = RoofstockKubernetesPodOperator(dag=dag, task_id="attachment_to_s3", code_folder=code_folder)
-staging_to_s3 = RoofstockKubernetesPodOperator(dag=dag, task_id="staging_to_s3", code_folder=code_folder)
-copy_to_snowflake = RoofstockKubernetesPodOperator(dag=dag, task_id="copy_to_snowflake", code_folder=code_folder)
+
+attachment_to_s3 = RoofstockKubernetesPodOperator(dag=dag,
+                                                  task_id="attachment_to_s3",
+                                                  code_folder=code_folder,
+                                                  script_name="greatschools_ingest",
+                                                  python_callable="attachment_to_s3")
+
+staging_to_s3 = RoofstockKubernetesPodOperator(dag=dag,
+                                               task_id="staging_to_s3",
+                                               code_folder=code_folder,
+                                               script_name="greatschools_ingest",
+                                               python_callable="staging_to_s3")
+
+copy_to_snowflake = RoofstockKubernetesPodOperator(dag=dag,
+                                                   task_id="copy_to_snowflake",
+                                                   code_folder=code_folder,
+                                                   script_name="greatschools_ingest",
+                                                   python_callable="copy_to_snowflake")
 
 
 def branching_def(**kwargs):
