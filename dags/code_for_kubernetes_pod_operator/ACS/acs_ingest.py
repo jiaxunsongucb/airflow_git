@@ -465,7 +465,7 @@ def copy_sequence_S3_to_Snowflake(logger, **kwargs):
 
     # check if the sequence file exists
     if not headers:
-        raise Exception(f"Sequence {sequence} in Lookup table LOOKUP{year}5 on Snowflake does not exist!")
+        logger.warning(f"Sequence {sequence} in Lookup table LOOKUP{year}5 on Snowflake does not exist!")
     else:
         # create table
         header_fixed = ["FILEID", "FILETYPE", "STUSAB", "CHARITER", "SEQUENCE", "LOGRECNO"]
