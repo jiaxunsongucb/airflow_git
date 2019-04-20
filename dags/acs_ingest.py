@@ -5,6 +5,7 @@ from airflow.macros.roofstock_plugin import volume_factory, pod_xcom_pull, defau
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.subdag_operator import SubDagOperator
 from airflow.executors.local_executor import LocalExecutor
+from airflow.contrib.executors.kubernetes_executor import KubernetesExecutor
 
 year = 2017
 
@@ -73,7 +74,7 @@ def subdag_transfer_sequence(parent_dag_name, child_dag_name, default_args):
 sequence_FTP_to_S3 = SubDagOperator(dag=dag,
                                     task_id="sequence_FTP_to_S3",
                                     subdag=subdag_transfer_sequence('acs_ingest', 'sequence_FTP_to_S3', default_args),
-                                    executor=LocalExecutor(parallelism=4), # default SequentialExecutor() without parallelism
+                                    executor=KubernetesExecutor(parallelism=4), # default SequentialExecutor() without parallelism
                                     executor_config={"KubernetesExecutor": {"request_memory": "128Mi",
                                                                             "limit_memory": "1024Mi",
                                                                             "request_cpu": "300m",
@@ -122,7 +123,7 @@ copy_sequence_S3_to_Snowflake = SubDagOperator(dag=dag,
                                                subdag=subdag_copy_sequence('acs_ingest',
                                                                            'copy_sequence_S3_to_Snowflake',
                                                                            default_args),
-                                               executor=LocalExecutor(parallelism=4),
+                                               executor=KubernetesExecutor(parallelism=4),
                                                executor_config={"KubernetesExecutor": {"request_memory": "128Mi",
                                                                                        "limit_memory": "1024Mi",
                                                                                        "request_cpu": "300m",
