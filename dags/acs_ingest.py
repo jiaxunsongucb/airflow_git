@@ -74,7 +74,7 @@ def subdag_transfer_sequence(parent_dag_name, child_dag_name, default_args):
 sequence_FTP_to_S3 = SubDagOperator(dag=dag,
                                     task_id="sequence_FTP_to_S3",
                                     subdag=subdag_transfer_sequence('acs_ingest', 'sequence_FTP_to_S3', default_args),
-                                    executor=KubernetesExecutor(), # default SequentialExecutor() without parallelism
+                                    executor=LocalExecutor(parallelism=0), # default SequentialExecutor() without parallelism
                                     executor_config={"KubernetesExecutor": {"request_memory": "128Mi",
                                                                             "limit_memory": "1024Mi",
                                                                             "request_cpu": "300m",
@@ -123,7 +123,7 @@ copy_sequence_S3_to_Snowflake = SubDagOperator(dag=dag,
                                                subdag=subdag_copy_sequence('acs_ingest',
                                                                            'copy_sequence_S3_to_Snowflake',
                                                                            default_args),
-                                               executor=KubernetesExecutor(),
+                                               executor=LocalExecutor(parallelism=0),
                                                executor_config={"KubernetesExecutor": {"request_memory": "128Mi",
                                                                                        "limit_memory": "1024Mi",
                                                                                        "request_cpu": "300m",
