@@ -716,19 +716,19 @@ def pull_variables_from_raw_tables(logger, **kwargs):
 
 if __name__ == "__main__":
     year = 2017
-    docs_FTP_to_S3(**{"year": year})
-    template_FTP_to_S3(**{"year": year})
-    sequence_FTP_to_S3(**{"year": year, "state": "California"})
-
-    copy_geo_S3_to_Snowflake(**{"year": year})
-    copy_lookup_S3_to_Snowflake(**{"year": year})
-    copy_sequence_S3_to_Snowflake(**{"year": year, "sequence": 1})
-
-    update_geometa(**{"dbt_dir": "/Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/dags/code_for_kubernetes_pod_operator/ACS/dbt",
-                      "dbt_profiles_dir": "/Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/.dbt"})
-    upload_variable_list_to_S3()
-    upload_variable_list_to_Snowflake(**{"year": year})
-    create_fact_table()
+    # docs_FTP_to_S3(**{"year": year})
+    # template_FTP_to_S3(**{"year": year})
+    # sequence_FTP_to_S3(**{"year": year, "state": "California"})
+    #
+    # copy_geo_S3_to_Snowflake(**{"year": year})
+    # copy_lookup_S3_to_Snowflake(**{"year": year})
+    # copy_sequence_S3_to_Snowflake(**{"year": year, "sequence": 1})
+    #
+    # update_geometa(**{"dbt_dir": "/Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/dags/code_for_kubernetes_pod_operator/ACS/dbt",
+    #                   "dbt_profiles_dir": "/Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/.dbt"})
+    # upload_variable_list_to_S3()
+    # upload_variable_list_to_Snowflake(**{"year": year})
+    # create_fact_table()
     pull_variables_from_raw_tables(**{"year": year,
                                       "dbt_dir": "/Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/dags/code_for_kubernetes_pod_operator/ACS/dbt",
                                       "dbt_profiles_dir": "/Users/jiaxunsong/Desktop/Roofstock/datatools/airflow_git/.dbt"})

@@ -2,6 +2,7 @@ from airflow import DAG
 from datetime import datetime, timedelta
 from airflow.operators.roofstock_plugin import RoofstockKubernetesPodOperator
 from airflow.macros.roofstock_plugin import volume_factory, pod_xcom_pull, default_affinity
+from airflow.contrib.kubernetes.pod import Resources
 from airflow.operators.dummy_operator import DummyOperator
 from airflow.operators.subdag_operator import SubDagOperator
 
@@ -71,7 +72,10 @@ def subdag_transfer_sequence(parent_dag_name, child_dag_name, default_args):
 
 sequence_FTP_to_S3 = SubDagOperator(dag=dag,
                                     task_id="sequence_FTP_to_S3",
-                                    subdag=subdag_transfer_sequence('acs_ingest', 'sequence_FTP_to_S3', default_args))
+                                    subdag=subdag_transfer_sequence('acs_ingest', 'sequence_FTP_to_S3', default_args),
+                                    affinity=default_affinity(),
+                                    resources=Resources(request_memory="128Mi", request_cpu="300m",
+                                                        limit_memory="1024Mi", limit_cpu="500m"))
 
 # --------------------------------------------------------
 # Populate database
@@ -114,7 +118,10 @@ copy_sequence_S3_to_Snowflake = SubDagOperator(dag=dag,
                                                task_id="copy_sequence_S3_to_Snowflake",
                                                subdag=subdag_copy_sequence('acs_ingest',
                                                                            'copy_sequence_S3_to_Snowflake',
-                                                                           default_args))
+                                                                           default_args),
+                                               affinity=default_affinity(),
+                                               resources=Resources(request_memory="128Mi", request_cpu="300m",
+                                                                   limit_memory="1024Mi", limit_cpu="500m"))
 
 # --------------------------------------------------------
 # Update VARIABLE_LISTS and FACT tables
@@ -175,7 +182,10 @@ def subdag_update_fact_on_Snowflake(parent_dag_name, child_dag_name, default_arg
 
 update_fact = SubDagOperator(dag=dag,
                              task_id="update_fact",
-                             subdag=subdag_update_fact_on_Snowflake('acs_ingest', 'update_fact', default_args))
+                             subdag=subdag_update_fact_on_Snowflake('acs_ingest', 'update_fact', default_args),
+                             affinity=default_affinity(),
+                             resources=Resources(request_memory="128Mi", request_cpu="300m", limit_memory="1024Mi",
+                                                 limit_cpu="500m"))
 
 delete_zips = DummyOperator(
     task_id="delete_zips",
