@@ -12,8 +12,8 @@ default_args = {
     'owner': 'jsong',
     'depends_on_past': False,
     'start_date': datetime.now(),
-    'retries': 0,
-    'retry_delay': timedelta(minutes=1)
+    'retries': 1,
+    'retry_delay': timedelta(minutes=5)
 }
 
 dag = DAG('acs_ingest', default_args=default_args, schedule_interval=timedelta(minutes=100))
