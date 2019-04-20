@@ -11,7 +11,7 @@ default_args = {
     'owner': 'jsong',
     'depends_on_past': False,
     'start_date': datetime.now(),
-    'retries': 1,
+    'retries': 2,
     'retry_delay': timedelta(minutes=5)
 }
 
