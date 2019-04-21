@@ -58,7 +58,7 @@ def subdag_transfer_sequence(parent_dag_name, child_dag_name, default_args):
                   'RhodeIsland', 'SouthCarolina', 'SouthDakota', 'Tennessee', 'Texas', 'UnitedStates', 'Utah',
                   'Vermont', 'Virginia', 'Washington', 'WestVirginia', 'Wisconsin', 'Wyoming']
 
-    for state in ['California']:
+    for state in state_list:
         RoofstockKubernetesPodOperator(dag=dag_subdag,
                                        task_id=f"{child_dag_name}-State-{state}",
                                        code_folder=code_folder,
