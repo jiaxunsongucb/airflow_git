@@ -11,7 +11,7 @@ default_args = {
     'owner': 'jsong',
     'depends_on_past': False,
     'start_date': datetime.now(),
-    'retries': 2,
+    'retries': 3,
     'retry_delay': timedelta(minutes=5)
 }
 
@@ -64,7 +64,8 @@ def subdag_transfer_sequence(parent_dag_name, child_dag_name, default_args):
                                        code_folder=code_folder,
                                        script_name="acs_ingest",
                                        python_callable="sequence_FTP_to_S3",
-                                       python_kwargs={"year": year, "state": state})
+                                       python_kwargs={"year": year, "state": state},
+                                       is_delete_operator_pod=True)
 
     return dag_subdag
 
@@ -109,7 +110,8 @@ def subdag_copy_sequence(parent_dag_name, child_dag_name, default_args):
             code_folder=code_folder,
             script_name="acs_ingest",
             python_callable="copy_sequence_S3_to_Snowflake",
-            python_kwargs={"year": year, "sequence": sequence}
+            python_kwargs={"year": year, "sequence": sequence},
+            is_delete_operator_pod=True
         )
 
     return dag_subdag
