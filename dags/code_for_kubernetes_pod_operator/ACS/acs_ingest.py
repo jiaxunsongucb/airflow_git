@@ -104,13 +104,14 @@ def sequence_FTP_to_S3(logger, **kwargs):
             # try to download file from FTP
             myfile = _ftp_download_file(ftp, entry)
 
+            # upload file onto S3
+            logger.info("Uploading data to S3 - {}...".format(s3_path))
+            mybucket.put_object(Key=s3_path, Body=myfile)
+
             # unzip the file and upload it onto S3
             if s3_path.endswith(".zip"):
                 _unzip(s3_path, myfile)
-            else:
-                # upload file onto S3
-                logger.info("Uploading data to S3 - {}...".format(s3_path))
-                mybucket.put_object(Key=s3_path, Body=myfile)
+
 
     # connect FTP
     host = "ftp2.census.gov"
