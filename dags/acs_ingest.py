@@ -65,7 +65,7 @@ def subdag_transfer_sequence(parent_dag_name, child_dag_name, default_args):
                                        script_name="acs_ingest",
                                        python_callable="sequence_FTP_to_S3",
                                        python_kwargs={"year": year, "state": state},
-                                       is_delete_operator_pod=True)
+                                       is_delete_operator_pod=False)
 
     return dag_subdag
 
@@ -76,8 +76,7 @@ sequence_FTP_to_S3 = SubDagOperator(dag=dag,
                                     executor_config={"KubernetesExecutor": {"request_memory": "128Mi",
                                                                             "limit_memory": "1024Mi",
                                                                             "request_cpu": "300m",
-                                                                            "limit_cpu": "500m",
-                                                                            "affinity": default_affinity()}})
+                                                                            "limit_cpu": "500m"}})
 
 # --------------------------------------------------------
 # Populate database
@@ -111,7 +110,7 @@ def subdag_copy_sequence(parent_dag_name, child_dag_name, default_args):
             script_name="acs_ingest",
             python_callable="copy_sequence_S3_to_Snowflake",
             python_kwargs={"year": year, "sequence": sequence},
-            is_delete_operator_pod=True
+            is_delete_operator_pod=False
         )
 
     return dag_subdag
@@ -125,8 +124,7 @@ copy_sequence_S3_to_Snowflake = SubDagOperator(dag=dag,
                                                executor_config={"KubernetesExecutor": {"request_memory": "128Mi",
                                                                                        "limit_memory": "1024Mi",
                                                                                        "request_cpu": "300m",
-                                                                                       "limit_cpu": "500m",
-                                                                                       "affinity": default_affinity()}})
+                                                                                       "limit_cpu": "500m"}})
 
 # --------------------------------------------------------
 # Update VARIABLE_LISTS and FACT tables
@@ -191,8 +189,7 @@ update_fact = SubDagOperator(dag=dag,
                              executor_config={"KubernetesExecutor": {"request_memory": "128Mi",
                                                                      "limit_memory": "1024Mi",
                                                                      "request_cpu": "300m",
-                                                                     "limit_cpu": "500m",
-                                                                     "affinity": default_affinity()}})
+                                                                     "limit_cpu": "500m"}})
 
 delete_zips = DummyOperator(
     task_id="delete_zips",
