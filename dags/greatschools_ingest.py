@@ -49,8 +49,7 @@ branching = BranchPythonOperator(
     task_id="branching",
     provide_context=True,
     python_callable=branching_def,
-    dag=dag,
-    executor_config={"KubernetesExecutor": {"affinity": default_affinity()}})
+    dag=dag)
 
 skipped = DummyOperator(
     task_id="skipped",
