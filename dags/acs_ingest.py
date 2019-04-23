@@ -200,6 +200,7 @@ delete_zips = DummyOperator(
 
 # --------------------------------------------------------
 # Build graph
+docs_FTP_to_S3 >> template_FTP_to_S3 >> sequence_FTP_to_S3
 docs_FTP_to_S3 >> copy_geo_S3_to_Snowflake >> update_geometa
 template_FTP_to_S3 >> copy_lookup_S3_to_Snowflake >> copy_sequence_S3_to_Snowflake
 sequence_FTP_to_S3 >> copy_sequence_S3_to_Snowflake >> delete_zips
