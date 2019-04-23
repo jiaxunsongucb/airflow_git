@@ -536,7 +536,7 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
         # a DNS-1123 subdomain must consist of lower case alphanumeric characters, '-' or '.', and must start and end
         # with an alphanumeric character (e.g. 'example.com', regex used for validation is '[a-z0-9]([-a-z0-9]*[
         # a-z0-9])?(\\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
-        return (self.script_name + "-" + self.python_callable).replace("_", "-").lower()
+        return (self.dag_id + "-" + self.task_id).replace("_", "-").lower()
 
     @property
     def default_arguments(self):
