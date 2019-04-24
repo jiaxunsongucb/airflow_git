@@ -110,7 +110,7 @@ def pod_xcom_pull(dag_id, task_id, key):
     return result
 
 
-def create_logger(tz="UTC"):
+def create_logger(DAG_ID, TASK_ID, EXECUTION_DATETIME="", tz="UTC"):
     """
     Function
     ----------------------
@@ -118,16 +118,16 @@ def create_logger(tz="UTC"):
 
     Parameter
     ----------------------
-    None
+    DAG_ID
+    TASK_ID
+    EXECUTION_DATETIME
 
     Return
     ----------------------
     logger : logging object
     """
-    # get system environments
-    DAG_ID = os.getenv("dag_id", "test_dag")
-    TASK_ID = os.getenv("task_id", "test_task")
-    EXECUTION_DATETIME = f"{datetime.now():%Y-%m-%dT%H:%M:%S.%f}"
+    if not EXECUTION_DATETIME:
+        EXECUTION_DATETIME = f"{datetime.now():%Y-%m-%dT%H:%M:%S.%f}"
 
     # create logger
     logger = logging.getLogger(f"{DAG_ID}-{TASK_ID}-{EXECUTION_DATETIME}")
@@ -170,7 +170,7 @@ def create_logger(tz="UTC"):
     logger.propagate = False
 
     logger.info(f"Start logging - DAG name: {DAG_ID}, task id: {TASK_ID}.")
-    return logger
+    return logger, log_path
 
 
 class LoggerWriter(object):
@@ -209,7 +209,7 @@ class LoggerWriter(object):
             self._buffer = str()
 
 
-def send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_log=False):
+def send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_sys_log=False):
     """
     Function
     ----------------------
@@ -242,12 +242,12 @@ def send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_l
 
     """
     # Prep the Slack message
-    color_dic = {"FAILED": "danger",
+    color_dict = {"FAILED": "danger",
                  "SUCCEEDED": "good"}
-    color = color_dic.get(task_status, "#EAECEE")  # if task_status is not in the dic, use grey
+    color = color_dict.get(task_status, "#EAECEE")  # if task_status is not in the dic, use grey
 
     # load slack id mapper from a json file.
-    slack_id_mapper = json.load(open("/airflow/utilities/slack_id_mapper.json", "r"))
+    slack_id_mapper = json.load(open("slack_id_mapper.json", "r"))
     slack_id = slack_id_mapper.get(dag_owner, None)
     if slack_id:
         owner_line = f"Owner: *{dag_owner}* <@{slack_id}>"
@@ -255,7 +255,7 @@ def send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_l
         owner_line = f"Owner: *{dag_owner}*"
 
     url = Variable.get('SLACK_WEBHOOK')  # the URL of the webhook that we post Slack messages to
-    dag_link = f"http://roofstock-dataeng-airflow.westus.cloudapp.azure.com:8080/admin/airflow/graph?dag_id={dag_id}"
+    dag_link = f"http://104.42.25.175:8080/graph?dag_id={dag_id}"
     msg_title = f"DAG: *<{dag_link}|{dag_id}>* Task: *{task_id}* just *{task_status}*!\n{owner_line}"
 
     payload = {"username": "Airflow Bot Notifications",
@@ -267,13 +267,14 @@ def send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_l
                                ]
                }
 
-    # Optionally attach log file
-    if send_log:
+    # Optionally attach system log file
+    if send_sys_log:
         # attach log files (airflow default log file)
         time.sleep(2)  # wait until the log files have been saved
         log = 'No log file found!'
         try:
-            p = Path('/home/roofstock/airflow/logs', dag_id, task_id)
+            BASE_LOG_FOLDER = conf.get('core', 'BASE_LOG_FOLDER')
+            p = Path(BASE_LOG_FOLDER, dag_id, task_id)
             log = sorted([f for f in sorted([d for d in p.iterdir()])[-1].iterdir()])[-1].open().read()
         except:
             pass
@@ -284,76 +285,7 @@ def send_slack_message(dag_id, task_id, dag_owner, task_status, msg_body, send_l
     requests.post(url, json=payload)
 
 
-def send_message(send_log=True, success_ignore=True, test=False):
-    """
-    Function
-    ----------------------
-    Send Slack message with status of Airflow DAG
-        https://api.slack.com/docs/messages
-        https://roofstock-inc.slack.com/services/BBTU106L9? --> alert-airflow Slack channel
-    Note: please try to limit the number of messages your DAG sends to Slack:
-        e.g. only send a message on DAG failure and/or success, etc.
-
-    Parameter
-    ----------------------
-    task_id : string
-
-    dag_id : string
-
-    dag_owner : string
-
-    task_status : string
-        "SUCCEEDED" or "FAILED"
-
-    msg_body : string
-        The message of customized log
-
-    send_log : boolean
-        indicates whether to send system log file or not
-
-    Return
-    ----------------------
-    None
-
-    """
-
-    def decorate(func):
-        @wraps(func)
-        def wrapper(**kwargs):
-            # Initialize variables
-            task_id = kwargs["task"].task_id
-            dag_owner = kwargs["task"].owner
-            dag_id = kwargs["dag"].dag_id
-
-            # Start off the slack message that contains the summary of the run
-            msg_body = f"START Logging dag: {dag_id}, task: {task_id}\nUTC: {datetime.now():%Y-%m-%dT%H:%M:%S}\n"
-            msg_body += "-" * 80 + "\n"
-            global logger
-            logger, log_path = create_logger(task_id, dag_id)
-
-            try:
-                result = func(logger, **kwargs)
-
-            except Exception as e:
-                logger.error("\n" + "".join(traceback.format_exception(*sys.exc_info())))
-                msg_body += open(log_path, "r").read()
-                msg_body += "Failed!"
-                if not test:
-                    send_slack_message(dag_id, task_id, dag_owner, "FAILED", msg_body, send_log=send_log)
-                raise  # reraises the exception
-            else:
-                msg_body += open(log_path, "r").read()
-                msg_body += "Succeeded!"
-                if not test and not success_ignore:
-                    send_slack_message(dag_id, task_id, dag_owner, "SUCCEEDED", msg_body, send_log=False)
-            return result
-
-        return wrapper
-
-    return decorate
-
-
-def run_with_logging(tz="US/Pacific"):
+def run_with_logging(tz="US/Pacific", success_ignore=True, test=True):
     """
     Function
     ----------------------
@@ -361,7 +293,9 @@ def run_with_logging(tz="US/Pacific"):
 
     Parameter
     ----------------------
-    None
+    tz
+    success_ignore
+    test
 
     Return
     ----------------------
@@ -372,27 +306,50 @@ def run_with_logging(tz="US/Pacific"):
 
         @wraps(func)
         def wrapper(**kwargs):
+            DAG_ID = os.getenv("dag_id", "test_dag")
+            TASK_ID = os.getenv("task_id", "test_task")
+            DAG_OWNER = os.getenv("dag_owner", "airflow")
+            EXECUTION_DATETIME = f"{datetime.now():%Y-%m-%dT%H:%M:%S.%f}"
+
             # mute snowflake.connector logging
             # workaround for this issue:
             # https://support.snowflake.net/s/question/0D50Z00008gYUIGSA4/python-snowflakeconnectornetwork-error-when-logging-enabled
             logging.getLogger("snowflake.connector").propagate = False
 
-            logger = create_logger(tz)
+            # Start off the slack message that contains the summary of the run
+            msg_body = f"START Logging dag: {DAG_ID}, task: {TASK_ID}\nUTC: {EXECUTION_DATETIME}\n"
+            msg_body += "-" * 80 + "\n"
+
+            global logger
+            logger, log_path = create_logger(DAG_ID, TASK_ID, EXECUTION_DATETIME, tz)
 
             # save all stdout to the logger
             sys.stdout = LoggerWriter(logger, logging.INFO)
+
             try:
                 result = func(logger, **kwargs)
-                logger.info("Process finished with exit code 0")
-                logger.removeHandler(logger.handlers[0])
-                return result
 
             except Exception as error:
                 logger.error(error)
                 logger.error("\n" + "".join(traceback.format_exception(*sys.exc_info())))
                 logger.error("Process finished with exit code 1")
                 logger.removeHandler(logger.handlers[0])
+                msg_body += open(log_path, "r").read()
+                msg_body += "Failed!"
+                if not test:
+                    send_slack_message(DAG_ID, TASK_ID, DAG_OWNER, "FAILED", msg_body, send_sys_log=True)
+
                 sys.exit(1)
+
+            else:
+                logger.info("Process finished with exit code 0")
+                logger.removeHandler(logger.handlers[0])
+                msg_body += open(log_path, "r").read()
+                msg_body += "Succeeded!"
+                if not test and not success_ignore:
+                    send_slack_message(DAG_ID, TASK_ID, DAG_OWNER, "SUCCEEDED", msg_body, send_sys_log=False)
+
+            return result
 
         return wrapper
 
@@ -547,7 +504,8 @@ class RoofstockKubernetesPodOperator(KubernetesPodOperator):
     def default_env_vars(self):
         default_env_vars = dict(AIRFLOW__CORE__EXECUTOR="LocalExecutor",
                                 dag_id=self.dag_id,
-                                task_id=self.task_id)
+                                task_id=self.task_id,
+                                dag_owner=self.dag.owner)
         return default_env_vars
 
     @property
